@@ -134,7 +134,7 @@ function CaptureDetail({ c }) {
       </div>
       <dl className="kv cap-kv">
         <dt>Alert</dt><dd>{eventLabel(c.alert_type)}{c.alert_id != null && ` · #${c.alert_id}`}</dd>
-        {c.alert_type === 'CRIMINAL_DETECTED' && (
+        {(c.alert_type === 'CRIMINAL_DETECTED' || (c.alert_type === 'PERSON_TRACKED' && c.person_name)) && (
           <>
             <dt>Subject</dt>
             <dd>

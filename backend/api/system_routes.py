@@ -32,6 +32,7 @@ class HeartbeatPayload(BaseModel):
     threat_score: Optional[int] = None
     frame_number: Optional[int] = None
     analytics: Optional[dict] = None
+    flags: Optional[list] = None        # red alerts in view now: [{type, label, origin}]
 
 
 @router.get("/status")
@@ -77,6 +78,7 @@ async def pipeline_heartbeat(
         "fps": body.fps,
         "threat_score": body.threat_score,
         "frame_number": body.frame_number,
+        "flags": (body.flags or [])[:8],
         "last_seen": now,
     }
 

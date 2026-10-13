@@ -61,9 +61,34 @@ def ensure_attribute_model() -> None:
         print(f"  attribute model not downloaded ({e}); captures will have no gender/age estimate")
 
 
+def ensure_reid_model() -> None:
+    """Fetch the person re-identification model (107 MB) used to follow a red-alert subject from
+    camera to camera. Best effort: without it subjects are only followed where their face is read."""
+    sys.path.insert(0, str(ROOT))
+    from core.tracking.cross_camera import REID_MODEL, REID_URL
+
+    if REID_MODEL.is_file():
+        return
+    try:
+        import urllib.request
+
+        REID_MODEL.parent.mkdir(parents=True, exist_ok=True)
+        print("Downloading cross-camera tracking model (107 MB)…")
+        tmp = REID_MODEL.with_suffix(".part")
+        urllib.request.urlretrieve(REID_URL, tmp)
+        if tmp.stat().st_size < 50_000_000:           # an error page, not the model
+            tmp.unlink()
+            raise ValueError("unexpected download size")
+        tmp.rename(REID_MODEL)
+        print(f"Downloaded tracking model → {REID_MODEL.relative_to(ROOT)}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  tracking model not downloaded ({e}); cross-camera tracking by appearance is off")
+
+
 def main() -> int:
     ensure_face_model()
     ensure_attribute_model()
+    ensure_reid_model()
     if not ENV_PATH.exists():
         if EXAMPLE.exists():
             ENV_PATH.write_text(EXAMPLE.read_text())

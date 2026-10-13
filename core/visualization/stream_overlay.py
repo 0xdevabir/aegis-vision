@@ -5,8 +5,9 @@ threat bar, stats box, banners. On the dashboard those duplicated the tile's own
 covered a quarter of the picture. This draws only what the operator needs on the video itself:
 
 * a box around every person the detector sees right now (green, orange if suspicious, red if on the
-  watchlist or armed), with corner accents so it reads at a glance;
-* a small label chip: "Person" for everyone, the watchlist name for a match.
+  watchlist, armed or followed from another camera), with corner accents so it reads at a glance;
+* a small label chip: "Person" for everyone, the watchlist name for a match, "TRACKING <who>" for a
+  red-alert subject recognised again by appearance.
 
 Boxes are eased toward each new AI result every rendered frame. AI results arrive at 5-10 Hz while
 the video runs at the camera's rate, so un-eased boxes visibly jump between results.
@@ -71,6 +72,8 @@ class StreamOverlay:
             if tid in ctx.criminal_ids or tid in ctx.confirmed_weapons:
                 color = RED
                 label = f"WATCHLIST  {name}" if tid in ctx.criminal_ids else "ARMED"
+            elif tid in getattr(ctx, "tracked", ()):
+                color, label = RED, f"TRACKING  {ctx.tracked[tid].label}"
             elif tid in ctx.suspicious_tracks:
                 color, label = ORANGE, "Person  suspicious"
             else:

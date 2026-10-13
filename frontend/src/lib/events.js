@@ -2,6 +2,7 @@
 
 export const EVENT_META = {
   CRIMINAL_DETECTED: { label: 'Watchlist match', group: 'faces', icon: 'watchlist' },
+  PERSON_TRACKED: { label: 'Tracked across cameras', group: 'faces', icon: 'eye' },
   WEAPON_DETECTED: { label: 'Weapon detected', group: 'weapon', icon: 'alert' },
   SUSPICIOUS_VEHICLE: { label: 'Watchlisted vehicle', group: 'vehicle', icon: 'vehicle' },
   SUSPICIOUS_BEHAVIOR: { label: 'Suspicious behavior', group: 'behavior', icon: 'eye' },
@@ -72,6 +73,7 @@ export function fromAlertRow(a) {
 /* Plain-language "why did this fire" — shown to operators so they can judge it. */
 export const EXPLAIN = {
   CRIMINAL_DETECTED: 'A face matched an enrolled person in at least 2 frames. A match is a lead, not an identification — compare the snapshot with the enrolled photos before confirming.',
+  PERSON_TRACKED: 'This person looks like someone who raised a watchlist or weapon alert earlier, here or on another camera. The match is on clothing and build, not the face, so similar clothes can match — compare the captures before acting.',
   WEAPON_DETECTED: 'A weapon-like object overlapped a person in at least 3 of the last 5 processed frames. Check the snapshot: tools, phones and umbrellas are common false positives.',
   FIRE_SMOKE_DETECTED: 'Fire or smoke was seen in at least 5 of the last 8 frames. Steam, fog and bright lights can look similar.',
   FALL_SUSPECTED: 'A person was upright, then stayed horizontal for 2 seconds or more. They may be resting or exercising — check the camera.',

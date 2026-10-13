@@ -82,6 +82,46 @@ class NotificationHub:
             confidence=confidence,
         )
 
+    def person_tracked(
+        self,
+        label: str,
+        target_key: str,
+        camera_location: str,
+        camera_id: str,
+        track_id: int,
+        now: float,
+        person_name: Optional[str] = None,
+        origin_location: str = "",
+        camera_name: str = "",
+        camera_lat: Optional[float] = None,
+        camera_lng: Optional[float] = None,
+    ) -> None:
+        """A red-alert subject was picked up again by appearance, usually on another camera."""
+        key = f"tracked_{camera_id}_{target_key}"
+        if not self._should_fire(key, now):
+            return
+
+        self._sound_alarm()
+        seen = f", first seen at {origin_location}" if origin_location else ""
+        message = self._geo_message(
+            f"TRACKING (appearance match, unverified): {label}{seen} — now",
+            camera_location, camera_id, camera_lat, camera_lng,
+        )
+        logger.critical(message)
+
+        dispatch_alert(
+            alert_type="PERSON_TRACKED",
+            severity="critical",
+            camera_location=camera_location,
+            camera_id=camera_id,
+            track_id=track_id,
+            person_name=person_name,
+            camera_name=camera_name or camera_location,
+            camera_lat=camera_lat,
+            camera_lng=camera_lng,
+            message=message,
+        )
+
     def weapon_detected(
         self,
         camera_location: str,

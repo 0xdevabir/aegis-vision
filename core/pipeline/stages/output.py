@@ -10,6 +10,7 @@ from utils.data import save_evidence_db
 from utils.alerts import NotificationHub
 from utils.alerts.capture import AlertCapturer
 from core.analysis.weapon_confirm import UNASSIGNED, WeaponConfirmer, associate
+from core.tracking.cross_camera import shared_tracker
 
 logger = logging.getLogger("HumanAnalysis")
 
@@ -30,6 +31,7 @@ class OutputStage(PipelineStage):
         )
         self._last_saved: dict = {}
         self.capturer = AlertCapturer()
+        self.cross_camera = shared_tracker()
         self.weapon_confirmer = WeaponConfirmer(window=5, min_hits=3)
         # Fire/smoke flickers more than weapons do: demand a longer persistence.
         self.fire_confirmer = WeaponConfirmer(window=8, min_hits=5)
@@ -83,6 +85,33 @@ class OutputStage(PipelineStage):
                 confidence=ctx.confirmed_weapons[UNASSIGNED]["score"], **capture_meta,
             )
 
+        # Red-alert subjects are remembered by appearance; anyone else who looks like one of them,
+        # here or on another camera, is flagged as tracked.
+        subjects, others = [], []
+        for track in ctx.tracks:
+            if not track.is_confirmed() or getattr(track, "time_since_update", 0) > 0:
+                continue
+            tid, box = track.track_id, track.to_ltrb()
+            if tid in ctx.criminal_ids:
+                name = ctx.identities.get(tid, "Unknown")
+                subjects.append((tid, box, f"name:{name}", name, "CRIMINAL_DETECTED", name))
+            elif tid in ctx.confirmed_weapons:
+                subjects.append((tid, box, f"armed:{camera_id}:{tid}", "Armed person", "WEAPON_DETECTED", None))
+            else:
+                others.append((tid, box))
+        try:
+            ctx.tracked = self.cross_camera.step(camera_id, location, now, ctx.frame, subjects, others)
+        except Exception as e:
+            logger.warning(f"Cross-camera tracking failed: {e}")
+        flags = {}
+        for _, _, key, label, alert_type, _ in subjects:
+            origin = self.cross_camera.targets[key].origin_location if key in self.cross_camera.targets else ""
+            flags[key] = {"type": alert_type, "label": label, "origin": origin if origin != location else ""}
+        for target in ctx.tracked.values():
+            flags[target.key] = {"type": "PERSON_TRACKED", "label": target.label,
+                                 "origin": target.origin_location if target.origin_camera != camera_id else ""}
+        ctx.live_flags = list(flags.values())
+
         for track in ctx.tracks:
             if not track.is_confirmed():
                 continue
@@ -135,6 +164,19 @@ class OutputStage(PipelineStage):
                     confidence=(ctx.identity_conf.get(track_id) if is_criminal
                                 else ctx.confirmed_weapons[track_id]["score"]),
                     **capture_meta,
+                )
+
+            target = ctx.tracked.get(track_id)
+            if target is not None:
+                self.notifications.person_tracked(
+                    label=target.label, person_name=target.person_name, target_key=target.key,
+                    origin_location=target.origin_location if target.origin_camera != camera_id else "",
+                    camera_location=location, camera_id=camera_id, track_id=track_id, now=now,
+                    camera_name=ctx.camera_name, camera_lat=ctx.camera_lat, camera_lng=ctx.camera_lng,
+                )
+                self.capturer.capture(
+                    f"track_{track_id}", now, ctx.frame, (x1, y1, x2, y2), alert_type="PERSON_TRACKED",
+                    track_id=track_id, person_name=target.person_name, **capture_meta,
                 )
 
             if is_suspicious:
@@ -199,7 +241,7 @@ class OutputStage(PipelineStage):
             100,
             len(ctx.tracks) * 5
             + (50 if ctx.confirmed_weapons else 0)
-            + len(ctx.active_criminals) * 50
+            + (len(ctx.active_criminals) + len(ctx.tracked)) * 50
             + len(ctx.anomalies) * 10,
         )
 

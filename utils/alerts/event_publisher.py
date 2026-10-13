@@ -256,12 +256,14 @@ def publish_heartbeat(
     threat_score: Optional[int] = None,
     frame_number: Optional[int] = None,
     analytics: Optional[dict] = None,
+    flags: Optional[list] = None,
 ) -> None:
     if not EVENTS_ENABLED:
         return
     _post_async(
         "/api/v1/system/heartbeat",
         {
+            "flags": flags or [],
             "camera_id": camera_id,
             "camera_location": camera_location,
             "fps": fps,

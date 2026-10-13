@@ -70,6 +70,8 @@ class FrameContext:
     confirmed_fire: dict = field(default_factory=dict)      # {'fire': detection}
     fall_tracks: dict = field(default_factory=dict)         # track_id → {'bbox'}
     confirmed_weapons: dict = field(default_factory=dict)   # track_id|-1 → detection
+    tracked: dict = field(default_factory=dict)             # track_id → cross-camera Target
+    live_flags: list = field(default_factory=list)          # red alerts in view now: [{type, label, origin}]
     alerts_to_send: list = field(default_factory=list)
     evidence_to_save: list = field(default_factory=list)
 

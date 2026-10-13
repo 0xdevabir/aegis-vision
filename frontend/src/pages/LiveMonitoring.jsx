@@ -16,6 +16,9 @@ const STATUS = {
   off: { label: 'OFF', tone: 'muted' },
 }
 
+// Red alerts in view right now, as reported by the camera itself.
+const FLAG = { CRIMINAL_DETECTED: 'WATCHLIST', WEAPON_DETECTED: 'ARMED', PERSON_TRACKED: 'TRACKING' }
+
 const ExpandIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
@@ -77,6 +80,18 @@ function CamFeed({ cam, objectFit = 'cover', starting = false, onPower }) {
         {showVideo && cam.fps != null && <span className="cam-chip">{cam.fps} FPS</span>}
         {cam.threat_score > 0 && <span className={`cam-chip ${cam.threat_score >= 40 ? 'danger' : 'warn'}`}>THREAT {cam.threat_score}</span>}
       </div>
+      {showVideo && cam.flags.length > 0 && (
+        <div className="cam-flags" role="status">
+          {cam.flags.map((f) => (
+            <span key={`${f.type}:${f.label}`} className="cam-flag">
+              <span className="dot" />
+              <b>{FLAG[f.type] || 'ALERT'}</b>
+              {f.label && f.type !== 'WEAPON_DETECTED' && <span>{f.label}</span>}
+              {f.origin && <span className="cam-flag-from">from {f.origin}</span>}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="cam-bottom">
         <div className="cam-name">{cam.name}</div>
         {cam.location && cam.location !== cam.name && <div className="cam-loc">{cam.location}</div>}
@@ -283,6 +298,7 @@ export function LiveMonitoring({ ctx }) {
         status: power[c.camera_id] === false ? 'off' : streaming.has(c.camera_id) ? 'live' : beat ? 'online' : 'offline',
         fps: beat?.fps ?? null,
         threat_score: beat?.threat_score ?? 0,
+        flags: beat?.flags || [],
         dvr: Boolean(beat?.recording),   // only claim REC when the pipeline reports it
       }
     }).sort((x, y) => (y.status === 'live') - (x.status === 'live') || x.name.localeCompare(y.name))
@@ -366,7 +382,7 @@ export function LiveMonitoring({ ctx }) {
                   key={cam?.camera_id || `empty-${i}`}
                   cam={cam}
                   selected={cam && cam.camera_id === activeCam && tiles.length > 1}
-                  alerting={cam && cam.camera_id === alertingId}
+                  alerting={cam && (cam.camera_id === alertingId || (cam.status === 'live' && cam.flags.length > 0))}
                   onSelect={() => cam && setSelectedId(cam.camera_id)}
                   onExpand={() => cam && setFullscreenId(cam.camera_id)}
                   starting={cam && starting.has(cam.camera_id)}

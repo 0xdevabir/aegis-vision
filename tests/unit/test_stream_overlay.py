@@ -73,3 +73,10 @@ def test_boxes_scale_with_the_resized_stream_frame():
     img = StreamOverlay().render(_blank(), _ctx([FakeTrack(1, (200, 200, 400, 600))]), 0.5, 0.0)
     ys, xs = np.nonzero(img.any(axis=2))
     assert xs.min() >= 95 and xs.max() <= 205                  # 200..400 at half size = 100..200
+
+
+def test_person_followed_from_another_camera_is_red():
+    ctx = _ctx([FakeTrack(1, (100, 100, 200, 300))])
+    ctx.tracked = {1: types.SimpleNamespace(label="x")}
+    img = StreamOverlay().render(_blank(), ctx, 1.0, 0.0)
+    assert img[100, 100, 2] > 200 and img[100, 100, 1] < 100

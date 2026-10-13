@@ -146,6 +146,7 @@ def run_camera_loop(
     start_time = time.time()
     thermal_mode = False
     last_heartbeat = 0.0
+    sent_flags = []
     heartbeat_interval = float(os.getenv("HEARTBEAT_INTERVAL", "5"))
     last_stream = 0.0
     stream_interval = 1.0 / float(os.getenv("STREAM_FPS", "5"))
@@ -223,7 +224,10 @@ def run_camera_loop(
                 fps_window_start = time.time()
 
             now = time.time()
-            if now - last_heartbeat >= heartbeat_interval:
+            # Red alerts in view (shown as flags on the Live page): a change goes out within a second.
+            flags = getattr(ctx, "live_flags", None) or []
+            if now - last_heartbeat >= heartbeat_interval or (flags != sent_flags and now - last_heartbeat >= 1.0):
+                sent_flags = flags
                 analytics_snapshot = None
                 try:
                     analytics_stage = next((s for s in pipeline.stages if s.name == "analytics"), None)
@@ -244,6 +248,7 @@ def run_camera_loop(
                     threat_score=ctx.threat_score if ctx is not None else 0,
                     frame_number=ctx.frame_number if ctx is not None else 0,
                     analytics=analytics_snapshot,
+                    flags=flags,
                 )
                 last_heartbeat = now
 

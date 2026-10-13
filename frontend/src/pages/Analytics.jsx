@@ -1,6 +1,6 @@
 import { parseTs } from '../lib/time'
 import { useEffect, useRef, useState } from 'react'
-import { Card, Icons, Empty, Tag } from '../components/ui'
+import { Card, Icons, Empty, Stat, Tag } from '../components/ui'
 import { AreaChart, BarList, Donut } from '../components/charts'
 import { fetchCalibrationMetrics, fetchLiveAnalytics } from '../services/api'
 
@@ -63,10 +63,11 @@ function LiveCamera({ cam }) {
 export function Analytics({ ctx }) {
   const { summary, trends, locations, events } = ctx
   const [cal, setCal] = useState(null)
+  const [calError, setCalError] = useState('')
   const [live, setLive] = useState({})
 
   useEffect(() => {
-    fetchCalibrationMetrics(168).then(setCal).catch(() => {})
+    fetchCalibrationMetrics(168).then(setCal).catch((e) => setCalError(e.message || 'Request failed'))
   }, [])
 
   useEffect(() => {
@@ -77,6 +78,11 @@ export function Analytics({ ctx }) {
   }, [])
 
   const trendData = trends.map((t) => t.events)
+  const trendLabels = trends.map((t) => {
+    const d = parseTs(`${t.date}T00:00:00`)
+    return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : t.date
+  })
+  const hourLabels = Array.from({ length: 24 }, (_, hr) => `${String(hr).padStart(2, '0')}:00`)
   const total = summary?.total_events ?? 0
   const crit = summary?.criminal_detections ?? 0
   const weap = summary?.weapon_detections ?? 0
@@ -95,67 +101,58 @@ export function Analytics({ ctx }) {
 
   return (
     <>
-      <div className="grid grid-4" style={{ marginBottom: 14 }}>
-        <div className="stat accent-primary"><span className="label">Events (24h)</span><span className="value">{total}</span></div>
-        <div className="stat accent-ok">
-          <span className="label">Precision</span>
-          <span className="value">{precision}</span>
-          <span className="delta">{cal?.labeled ? `${cal.labeled} labeled` : 'label alerts to calibrate'}</span>
-        </div>
-        <div className="stat accent-warn">
-          <span className="label">False Alarm Rate</span>
-          <span className="value">{far}</span>
-          <span className="delta">{cal?.false_alarm_rate != null ? 'from ground truth' : 'proxy from dismissals'}</span>
-        </div>
-        <div className="stat accent-cyan">
-          <span className="label">Time to Acknowledge</span>
-          <span className="value">{fmtDuration(summary?.mtta_seconds)}</span>
-          <span className="delta">{summary?.acknowledged_alerts ? `mean of ${summary.acknowledged_alerts} acknowledged` : 'no acknowledged alerts yet'}</span>
-        </div>
+      <div className="grid grid-4 mb">
+        <Stat label="Events" value={summary ? total : '—'} delta={`Last ${summary?.period_hours ?? 24} hours`} accent="primary" icon={Icons.incident} />
+        <Stat label="Precision" value={precision} delta={cal?.labeled ? `From ${cal.labeled} labelled detections` : 'Label detections to measure this'} accent="ok" icon={Icons.check} />
+        <Stat label="False alarm rate" value={far}
+          delta={cal?.false_alarm_rate != null ? 'From labelled detections' : '* Estimated from dismissed alerts'} accent="warn" icon={Icons.alert} />
+        <Stat label="Time to acknowledge" value={fmtDuration(summary?.mtta_seconds)}
+          delta={summary?.acknowledged_alerts ? `Average of ${summary.acknowledged_alerts} acknowledged alerts` : 'No acknowledged alerts yet'} accent="cyan" icon={Icons.clock} />
       </div>
 
-      <div className="grid grid-2" style={{ marginBottom: 14 }}>
-        <Card title="Daily Incidents" sub="last 7 days">
-          {trendData.length ? <AreaChart data={trendData} label="Events / day" /> : <Empty icon={Icons.chart}>No trend data yet</Empty>}
+      <div className="grid grid-2 mb">
+        <Card title="Events per day" sub="Last 7 days">
+          <AreaChart data={trendData} labels={trendLabels} label="Events per day" emptyText="No events in the last 7 days" />
         </Card>
-        <Card title="Hourly Activity Heat" sub="events by hour (session)">
-          <AreaChart data={hourBuckets} color="var(--purple)" label="Events / hour" />
+        <Card title="Alerts by hour of day" sub={`Latest ${events.length} alerts · your local time`}>
+          <AreaChart data={hourBuckets} labels={hourLabels} color="var(--purple)" label="Alerts per hour" emptyText="No alerts loaded yet" />
         </Card>
       </div>
 
-      <div className="grid grid-2" style={{ marginBottom: 14 }}>
-        <Card title="Threat Distribution" sub="last 24h">
+      <div className="grid grid-2 mb">
+        <Card title="What was detected" sub={`Last ${summary?.period_hours ?? 24} hours`}>
           <Donut
             label={total}
             sublabel="events"
             segments={[
-              { label: 'Criminal', value: crit, color: 'var(--danger)' },
+              { label: 'Watchlist', value: crit, color: 'var(--danger)' },
               { label: 'Weapon', value: weap, color: 'var(--orange)' },
               { label: 'Suspicious', value: susp, color: 'var(--warn)' },
             ]}
           />
         </Card>
-        <Card title="Location Hotspots" sub="detections per camera location">
-          <BarList items={locations.map((l) => ({ label: l.location || 'Unknown', value: l.events }))} color="var(--cyan)" />
+        <Card title="Busiest locations" sub="Detections per camera location">
+          <BarList items={locations.map((l) => ({ label: l.location || 'Unknown', value: l.events }))} color="var(--cyan)" emptyText="No detections in this period" />
         </Card>
       </div>
 
-      <Card title="Live Occupancy" sub="where people stand · line crossings · dwell (per camera)">
+      <Card title="Live occupancy" sub="Where people stand, line crossings and dwell time per camera">
         {Object.keys(live).length ? (
           <div className="grid grid-2">
             {Object.values(live).map((cam) => <LiveCamera key={cam.camera_id} cam={cam} />)}
           </div>
-        ) : <Empty icon={Icons.chart}>No live analytics yet — start the pipeline</Empty>}
+        ) : <Empty icon={Icons.chart}>No live occupancy data. It appears while the detection pipeline is running.</Empty>}
       </Card>
       <div style={{ height: 14 }} />
 
-      <Card title="Model Calibration" sub="ground-truth labels · confusion matrix">
-        {!cal && <Empty icon={Icons.chart}>Loading calibration metrics…</Empty>}
+      <Card title="Detection accuracy" sub="From detections people have labelled · last 7 days">
+        {!cal && !calError && <div className="skeleton" style={{ height: 120 }} aria-label="Loading accuracy figures" />}
+        {!cal && calError && <Empty icon={Icons.alert}>Could not load accuracy figures: {calError}</Empty>}
         {cal && (
           <div className="grid grid-2">
             <div>
               <dl className="kv">
-                <dt>Labeled</dt><dd>{cal.labeled}</dd>
+                <dt>Labelled</dt><dd>{cal.labeled}</dd>
                 <dt>True positives</dt><dd>{cal.confusion?.true_positive ?? 0}</dd>
                 <dt>False positives</dt><dd>{cal.confusion?.false_positive ?? 0}</dd>
                 <dt>Recall</dt><dd>{cal.recall != null ? `${(cal.recall * 100).toFixed(1)}%` : '—'}</dd>
@@ -163,7 +160,7 @@ export function Analytics({ ctx }) {
                 <dt>Dismiss rate</dt><dd>{cal.proxy?.dismiss_rate != null ? `${(cal.proxy.dismiss_rate * 100).toFixed(1)}%` : '—'}</dd>
               </dl>
               <p className="muted" style={{ fontSize: '0.76rem', marginTop: 10 }}>
-                Mark evidence as False Positive in Evidence, or run{' '}
+                Mark a snapshot as a false positive on the Evidence page, or run{' '}
                 <code className="mono">python scripts/evaluate_pipeline.py --output data/results/eval.json</code>
               </p>
             </div>
@@ -178,7 +175,7 @@ export function Analytics({ ctx }) {
                   </dl>
                 </>
               ) : (
-                <Empty icon={Icons.report}>No eval.json yet — run evaluate_pipeline.py</Empty>
+                <Empty icon={Icons.report}>No offline evaluation yet. Run <code>evaluate_pipeline.py</code> to add one.</Empty>
               )}
             </div>
           </div>

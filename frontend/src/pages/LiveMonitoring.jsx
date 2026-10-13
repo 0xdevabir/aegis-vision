@@ -1,5 +1,6 @@
 import { can } from '../lib/permissions'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useToast } from '../components/Toast'
 import { Card, Icons, Seg, Pill, Stat, Tag, Empty, timeAgo } from '../components/ui'
 import {
   liveStreamUrl,
@@ -121,20 +122,35 @@ function CamFullscreen({ cam, alerting, onClose }) {
 function PtzPad({ cameraId }) {
   const [state, setState] = useState(null)
   const [presetName, setPresetName] = useState('Gate')
+  const { push: toast } = useToast()
+  const moving = useRef(false)
+
+  // Run a PTZ command and show its result; a failure is reported instead of being dropped.
+  const run = async (call, failText) => {
+    try {
+      setState(await call())
+    } catch (e) {
+      toast(`${failText}: ${e.message || 'request failed'}`, 'danger')
+    }
+  }
 
   useEffect(() => {
     if (!cameraId) return
     fetchPtz(cameraId).then(setState).catch(() => {})
   }, [cameraId])
 
-  const move = async (pan, tilt, zoom = 0) => {
-    try {
-      setState(await ptzMove(cameraId, { pan, tilt, zoom }))
-    } catch { /* offline */ }
+  const move = (pan, tilt, zoom = 0) => {
+    moving.current = true
+    return run(() => ptzMove(cameraId, { pan, tilt, zoom }), 'Could not move the camera')
   }
-  const stop = async () => { try { setState(await ptzStop(cameraId)) } catch { /* */ } }
+  // Pointer-leave also fires when nothing is held, so only send a stop after a move.
+  const stop = async () => {
+    if (!moving.current) return
+    moving.current = false
+    try { setState(await ptzStop(cameraId)) } catch { /* the next move reports the problem */ }
+  }
 
-  if (!cameraId) return <Empty icon={Icons.camera}>Select a camera tile</Empty>
+  if (!cameraId) return <Empty icon={Icons.camera}>Select a camera to control it</Empty>
 
   const mode = state?.mode || 'digital'
   const dig = state?.digital || { pan: 0, tilt: 0, zoom: 1 }
@@ -144,46 +160,42 @@ function PtzPad({ cameraId }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <Seg
           value={mode}
-          onChange={async (m) => setState(await ptzSetMode(cameraId, m))}
-          options={[{ value: 'digital', label: 'Digital PTZ' }, { value: 'onvif', label: 'ONVIF' }]}
+          onChange={(m) => run(() => ptzSetMode(cameraId, m), 'Could not switch mode')}
+          options={[{ value: 'digital', label: 'Digital' }, { value: 'onvif', label: 'Camera motor' }]}
         />
         <Tag tone={state?.onvif?.configured ? 'ok' : 'muted'}>
-          {state?.onvif?.configured ? `ONVIF ${state.onvif.host}` : 'ONVIF simulator'}
+          {state?.onvif?.configured ? `ONVIF ${state.onvif.host}` : 'No motorised camera set up'}
         </Tag>
       </div>
 
       <div className="ptz-pad">
-        <button className="ptz-btn" onMouseDown={() => move(0, 1)} onMouseUp={stop} onMouseLeave={stop} aria-label="Tilt up"><Chevron dir="up" /></button>
+        <button type="button" className="ptz-btn" onPointerDown={() => move(0, 1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Tilt up"><Chevron dir="up" /></button>
         <div className="ptz-mid">
-          <button className="ptz-btn" onMouseDown={() => move(-1, 0)} onMouseUp={stop} onMouseLeave={stop} aria-label="Pan left"><Chevron dir="left" /></button>
-          <button className="ptz-btn ptz-home" onClick={async () => setState(await ptzHome(cameraId))} aria-label="Home" title="Home"><HomeIcon /></button>
-          <button className="ptz-btn" onMouseDown={() => move(1, 0)} onMouseUp={stop} onMouseLeave={stop} aria-label="Pan right"><Chevron dir="right" /></button>
+          <button type="button" className="ptz-btn" onPointerDown={() => move(-1, 0)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Pan left"><Chevron dir="left" /></button>
+          <button type="button" className="ptz-btn ptz-home" onClick={() => run(() => ptzHome(cameraId), 'Could not return to the home position')} aria-label="Return to home position" title="Home position"><HomeIcon /></button>
+          <button type="button" className="ptz-btn" onPointerDown={() => move(1, 0)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Pan right"><Chevron dir="right" /></button>
         </div>
-        <button className="ptz-btn" onMouseDown={() => move(0, -1)} onMouseUp={stop} onMouseLeave={stop} aria-label="Tilt down"><Chevron dir="down" /></button>
+        <button type="button" className="ptz-btn" onPointerDown={() => move(0, -1)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Tilt down"><Chevron dir="down" /></button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
         <span className="muted" style={{ fontSize: '0.75rem' }}>Zoom</span>
-        <button className="btn btn-sm" onMouseDown={() => move(0, 0, -0.5)} onMouseUp={stop}>−</button>
-        <input
-          type="range" min="1" max="8" step="0.1" value={dig.zoom}
-          readOnly
-          style={{ flex: 1 }}
-        />
-        <button className="btn btn-sm" onMouseDown={() => move(0, 0, 0.5)} onMouseUp={stop}>+</button>
+        <button type="button" className="btn btn-sm" onPointerDown={() => move(0, 0, -0.5)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Zoom out">−</button>
+        <progress max="7" value={Number(dig.zoom) - 1} style={{ flex: 1 }} aria-label="Zoom level" />
+        <button type="button" className="btn btn-sm" onPointerDown={() => move(0, 0, 0.5)} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop} aria-label="Zoom in">+</button>
         <b style={{ fontSize: '0.8rem', width: 36 }}>{Number(dig.zoom).toFixed(1)}×</b>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-        <input className="input" style={{ width: 100, padding: '4px 8px' }} value={presetName} onChange={(e) => setPresetName(e.target.value)} />
-        <button className="btn btn-sm" onClick={async () => setState(await ptzSavePreset(cameraId, presetName || 'Preset'))}>Save preset</button>
+        <input className="input" style={{ width: 100, padding: '4px 8px' }} value={presetName} maxLength={30} aria-label="Preset name" onChange={(e) => setPresetName(e.target.value)} />
+        <button type="button" className="btn btn-sm" onClick={() => run(() => ptzSavePreset(cameraId, presetName.trim() || 'Preset'), 'Could not save the preset')}>Save position</button>
         {(state?.presets || []).map((p) => (
-          <button key={p} className="btn btn-sm btn-primary" onClick={async () => setState(await ptzGotoPreset(cameraId, p))}>{p}</button>
+          <button type="button" key={p} className="btn btn-sm btn-primary" title={`Go to ${p}`} onClick={() => run(() => ptzGotoPreset(cameraId, p), `Could not go to ${p}`)}>{p}</button>
         ))}
       </div>
-      {state?.last_error && <p className="muted" style={{ fontSize: '0.72rem', marginTop: 8, color: 'var(--warn)' }}>ONVIF: {state.last_error} (simulator active)</p>}
+      {state?.last_error && <p className="muted" style={{ fontSize: '0.72rem', marginTop: 8, color: 'var(--warn)' }}>Camera motor: {state.last_error}. Commands are being simulated.</p>}
       <p className="muted" style={{ fontSize: '0.72rem', marginTop: 8 }}>
-        Digital PTZ crops the live stream; ONVIF drives a physical camera.
+        Digital zooms and pans inside the picture. Camera motor moves a motorised (ONVIF) camera. Hold a button to keep moving.
       </p>
     </div>
   )
@@ -200,6 +212,8 @@ export function LiveMonitoring({ ctx }) {
   const [replayUrl, setReplayUrl] = useState(null)
   const [replayBusy, setReplayBusy] = useState(false)
   const [replayError, setReplayError] = useState('')
+  const replayRef = useRef(null)
+  useEffect(() => () => { if (replayRef.current) URL.revokeObjectURL(replayRef.current) }, [])
 
   // One list: registered cameras, overlaid with live heartbeat + stream state.
   const camList = useMemo(() => {
@@ -262,7 +276,8 @@ export function LiveMonitoring({ ctx }) {
       const idx = Math.min(timeline.length - 1, Math.floor((scrub / 100) * timeline.length))
       const t = timeline[idx]?.start || new Date().toISOString()
       const { blobUrl } = await openVmsPlayback(activeCam, t)
-      if (replayUrl) URL.revokeObjectURL(replayUrl)
+      if (replayRef.current) URL.revokeObjectURL(replayRef.current)
+      replayRef.current = blobUrl
       setReplayUrl(blobUrl)
     } catch (e) {
       setReplayError(e.message || 'No recording at this time')
@@ -277,18 +292,18 @@ export function LiveMonitoring({ ctx }) {
     <>
       <div className="grid grid-4 live-stats">
         <Stat label="Live streams" value={`${counts.live}/${camList.length}`} accent={counts.live ? 'ok' : 'warn'}
-          delta={counts.live ? 'receiving video' : 'no video received'} />
-        <Stat label="Cameras reporting" value={counts.online} accent="primary" delta="heartbeat or video" />
-        <Stat label="Threat level" value={(threatLevel || 'low').toUpperCase()}
-          accent={threatLevel === 'critical' ? 'danger' : threatLevel === 'high' ? 'warn' : 'ok'} delta="last 15 minutes" />
-        <Stat label="DVR coverage" value={`${coverageHrs.toFixed(1)} h`} accent="primary" delta="selected camera · 24 h" />
+          delta={counts.live ? 'Receiving video' : 'No video received'} icon={Icons.live} />
+        <Stat label="Cameras reporting" value={counts.online} accent="primary" delta="Connected to the system" icon={Icons.camera} />
+        <Stat label="Threat level" value={(threatLevel || 'low').replace(/^./, (c) => c.toUpperCase())} icon={Icons.shield}
+          accent={threatLevel === 'critical' ? 'danger' : threatLevel === 'high' ? 'warn' : 'ok'} delta="Last 15 minutes" />
+        <Stat label="Recorded video" value={`${coverageHrs.toFixed(1)} h`} accent="primary" delta="Selected camera · last 24 hours" icon={Icons.clock} />
       </div>
 
       <div className="live-layout">
         <div className="live-main">
         <Card
           title="Live view"
-          sub={activeInfo ? `selected: ${activeInfo.name}` : undefined}
+          sub={activeInfo ? `Selected: ${activeInfo.name}` : undefined}
           actions={
             <div className="cam-controls">
               <Seg value={layout} onChange={setLayout}
@@ -318,7 +333,7 @@ export function LiveMonitoring({ ctx }) {
           )}
         </Card>
 
-      <Card title="Recordings" sub={`${timeline.length} segments · 24 h · ${activeInfo?.name || '—'}`}
+      <Card title="Recordings" sub={`${timeline.length} clips · last 24 hours · ${activeInfo?.name || 'no camera selected'}`}
         actions={<button className="btn btn-sm" onClick={loadTimeline}>Refresh</button>}>
         {timeline.length === 0 ? (
           <Empty icon={Icons.clock}>No recordings for this camera yet. Segments are saved every 60 seconds while video is flowing.</Empty>
@@ -373,11 +388,11 @@ export function LiveMonitoring({ ctx }) {
                   <Tag tone={STATUS[c.status].tone}>{STATUS[c.status].label}</Tag>
                 </button>
               ))}
-              {camList.length === 0 && <div className="live-hint" style={{ padding: 14 }}>None</div>}
+              {camList.length === 0 && <div className="live-hint" style={{ padding: 14 }}>No cameras yet</div>}
             </div>
           </Card>
           {can(me?.role, 'ptz') && (
-            <Card title="PTZ control" sub={activeInfo?.name || '—'}>
+            <Card title="Pan, tilt and zoom" sub={activeInfo?.name || 'No camera selected'}>
               <PtzPad cameraId={activeCam} />
             </Card>
           )}

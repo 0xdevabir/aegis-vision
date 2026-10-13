@@ -32,10 +32,7 @@ class FaceEncodingResponse(BaseModel):
     id: int
     person_id: str
     person_name: Optional[str]
-    encoding_version: str
-
-    class Config:
-        from_attributes = True
+    encoding_version: Optional[str]
 
 
 class KnownPersonResponse(BaseModel):
@@ -129,7 +126,11 @@ def _enroll_all(db: Session, person: KnownPerson, uploads: List[tuple]) -> List[
 @router.get("/", response_model=list[FaceEncodingResponse])
 def list_encodings(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                    user: User = Depends(operator_or_admin)):
-    return db.query(FaceEncoding).offset(skip).limit(limit).all()
+    # FaceEncoding.person_id is the integer FK; the API exposes the person's public ID and name.
+    rows = db.query(FaceEncoding.id, KnownPerson.person_id, KnownPerson.name, FaceEncoding.encoding_version) \
+        .join(KnownPerson, KnownPerson.id == FaceEncoding.person_id) \
+        .order_by(FaceEncoding.id).offset(skip).limit(limit).all()
+    return [{"id": r[0], "person_id": r[1], "person_name": r[2], "encoding_version": r[3]} for r in rows]
 
 
 @router.get("/known-persons", response_model=list[KnownPersonResponse])

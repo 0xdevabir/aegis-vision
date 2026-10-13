@@ -28,9 +28,16 @@ case "$role" in
     wait_for_db
     echo "[entrypoint] waiting for the API…"
     until curl -sf "${BACKEND_URL:-http://backend:8000}/health" >/dev/null; do sleep 3; done
+    # Optional single-file source (set PIPELINE_VIDEO=data/demo/clips/foo.mp4).
+    # Default: multi-camera from config/cameras.yaml (webcam indexes use LOCAL_CAMERA_URL).
+    if [ -n "${PIPELINE_VIDEO:-}" ]; then
+      echo "[entrypoint] pipeline video → ${PIPELINE_VIDEO}"
+      exec python main.py --video "${PIPELINE_VIDEO}" --no-display
+    fi
     exec python main.py --multi --no-display
     ;;
   *)
     exec "$@"
     ;;
 esac
+

@@ -2,9 +2,14 @@ import { can } from '../lib/permissions'
 import { useState } from 'react'
 import { Card, Icons, Tag, Empty, timeAgo, Modal, Seg } from '../components/ui'
 import { evidenceImageUrl, fetchCustody, verifyCustody, addCalibrationLabel } from '../services/api'
+import { useToast } from '../components/Toast'
+
+const kindIcon = (ev) => (ev.is_criminal ? Icons.watchlist : ev.weapon_present ? Icons.alert : ev.is_suspicious ? Icons.eye : Icons.camera)
 
 export function EvidencePage({ ctx }) {
   const { evidence, me } = ctx
+  const { push: toast } = useToast()
+  const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState(null)
@@ -28,7 +33,9 @@ export function EvidencePage({ ctx }) {
     setCustody(null)
     try {
       setCustody(await fetchCustody(ev.id))
-    } catch { /* offline */ }
+    } catch (e) {
+      toast(`Could not load the custody chain: ${e.message}`, 'danger')
+    }
   }
 
   const doVerify = async () => {
@@ -41,47 +48,55 @@ export function EvidencePage({ ctx }) {
   }
 
   const labelFP = async () => {
-    await addCalibrationLabel({
-      evidence_id: selected.id,
-      detection_type: selected.category || 'unknown',
-      predicted_label: selected.category,
-      ground_truth: 'false_positive',
-      notes: 'Marked false positive from Evidence Center',
-    })
-    setVerifyResult((r) => ({ ...(r || {}), labeled: 'false_positive' }))
+    setBusy(true)
+    try {
+      await addCalibrationLabel({
+        evidence_id: selected.id,
+        detection_type: selected.category || 'unknown',
+        predicted_label: selected.category,
+        ground_truth: 'false_positive',
+        notes: 'Marked false positive from Evidence Center',
+      })
+      toast('Marked as a false positive', 'ok')
+    } catch (e) {
+      toast(e.message || 'Could not save the label', 'danger')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <>
       <div className="toolbar">
-        <div className="searchbox" style={{ maxWidth: 320, cursor: 'text' }}>
+        <label className="search-input">
+          <span className="sr-only">Search evidence</span>
           <Icons.search />
-          <input
-            className="input" placeholder="Search evidence…" value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={{ border: 'none', background: 'transparent', padding: 0, flex: 1 }}
-          />
-        </div>
+          <input className="input" type="search" placeholder="Search by person, camera or category…" value={query}
+            onChange={(e) => setQuery(e.target.value)} />
+        </label>
         <Seg
           value={filter}
           onChange={setFilter}
           options={[
             { value: 'all', label: 'All' },
-            { value: 'criminal', label: 'Criminal' },
+            { value: 'criminal', label: 'Watchlist' },
             { value: 'weapon', label: 'Weapon' },
             { value: 'suspicious', label: 'Suspicious' },
           ]}
         />
         <span className="spacer" />
-        <span className="muted" style={{ fontSize: '0.8rem' }}>{filtered.length} records</span>
+        <span className="muted" style={{ fontSize: '0.8rem' }}>{filtered.length} of {evidence.length} records</span>
       </div>
 
       {filtered.length === 0 ? (
-        <Card><Empty icon={Icons.evidence}>No evidence records — snapshots are captured automatically on detection</Empty></Card>
+        <Card><Empty icon={Icons.evidence}>{evidence.length ? 'No evidence matches this search or filter.' : 'No evidence yet. A snapshot is saved automatically whenever a camera detects something.'}</Empty></Card>
       ) : (
         <div className="evi-grid">
-          {filtered.map((ev) => (
-            <div key={ev.id} className="evi-card" onClick={() => open(ev)}>
+          {filtered.map((ev) => {
+            const KindIcon = kindIcon(ev)
+            return (
+            <button type="button" key={ev.id} className="evi-card" onClick={() => open(ev)}
+              aria-label={`Open evidence ${ev.id}: ${ev.person_name || `track ${ev.track_id}`}`}>
               <div className="evi-thumb" style={{ position: 'relative', overflow: 'hidden' }}>
                 {ev.has_image ? (
                   <img
@@ -91,9 +106,7 @@ export function EvidencePage({ ctx }) {
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => { e.target.style.display = 'none' }}
                   />
-                ) : (
-                  ev.is_criminal ? '🎭' : ev.weapon_present ? '🔫' : ev.is_suspicious ? '👁' : '📷'
-                )}
+                ) : <KindIcon />}
                 <Tag tone={ev.is_criminal ? 'danger' : ev.weapon_present ? 'orange' : ev.is_suspicious ? 'warn' : 'ok'}>
                   {ev.category}
                 </Tag>
@@ -101,10 +114,11 @@ export function EvidencePage({ ctx }) {
               <div className="evi-body">
                 <b>{ev.person_name || `Track #${ev.track_id}`}</b>
                 <div className="meta">{ev.camera_location} · {timeAgo(ev.timestamp)}</div>
-                <div className="meta mono">{(ev.content_sha256 || 'no-hash').slice(0, 16)}…</div>
+                <div className="meta mono">{ev.content_sha256 ? `${ev.content_sha256.slice(0, 16)}…` : 'No hash recorded'}</div>
               </div>
-            </div>
-          ))}
+            </button>
+            )
+          })}
         </div>
       )}
 
@@ -119,8 +133,8 @@ export function EvidencePage({ ctx }) {
                   <Icons.download /> Download
                 </a>
               )}
-              {can(me?.role, 'evidence.label') && <button className="btn" onClick={labelFP}>Mark False Positive</button>}
-              <button className="btn btn-primary" onClick={doVerify}><Icons.check /> Verify Integrity</button>
+              {can(me?.role, 'evidence.label') && <button className="btn" onClick={labelFP} disabled={busy}>Mark as false positive</button>}
+              <button className="btn btn-primary" onClick={doVerify}><Icons.check /> Verify integrity</button>
             </>
           }
         >
@@ -132,7 +146,7 @@ export function EvidencePage({ ctx }) {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'var(--media)' }}
                 onError={(e) => { e.target.style.display = 'none' }}
               />
-            ) : (selected.is_criminal ? '🎭' : selected.weapon_present ? '🔫' : '📷')}
+            ) : (() => { const KindIcon = kindIcon(selected); return <KindIcon /> })()}
           </div>
           <dl className="kv" style={{ marginBottom: 18 }}>
             <dt>Subject</dt><dd>{selected.person_name || `Track #${selected.track_id}`}</dd>
@@ -144,14 +158,13 @@ export function EvidencePage({ ctx }) {
                 <dt>Integrity</dt>
                 <dd>
                   <Tag tone={verifyResult.ok ? 'ok' : 'danger'}>
-                    {verifyResult.ok ? 'VALID' : 'TAMPER / MISMATCH'}
+                    {verifyResult.ok ? 'Unchanged since capture' : (verifyResult.error || 'Does not match the recorded hash')}
                   </Tag>
-                  {verifyResult.labeled && <span className="muted"> · labeled {verifyResult.labeled}</span>}
                 </dd>
               </>
             )}
           </dl>
-          <h4 style={{ marginBottom: 10, fontSize: '0.9rem' }}>Chain of Custody (append-only)</h4>
+          <h4 style={{ marginBottom: 10, fontSize: '0.9rem' }}>Chain of custody</h4>
           <div className="timeline">
             {(custody?.chain || []).length === 0 && (
               <div className="timeline-item"><div className="t-time">{timeAgo(selected.timestamp)}</div>Captured by AI pipeline</div>

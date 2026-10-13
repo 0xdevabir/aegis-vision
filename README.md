@@ -1,62 +1,121 @@
-# Aegis — AI Smart Surveillance System
+# Aegis
 
-**Real-time computer vision surveillance with watchlist recognition, GPS-tagged alerts, and an operator command center.**
+### See the threat, pin the place, alert the operators — before the moment passes
 
-Aegis combines a modular CV pipeline, a FastAPI backend, and a React dashboard into one end-to-end platform. It detects people, vehicles, and weapons; matches faces against a watchlist; analyzes suspicious behavior; and dispatches alerts across the database, audit log, WebSockets, and optional webhooks — with camera GPS on every critical event.
+![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-111F68)
+![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?logo=opencv&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-184-success)
+![CI](https://img.shields.io/badge/CI-ruff%20%2B%20pytest-blue)
 
----
+**AI Smart Surveillance** · real-time vision pipeline · watchlist face recognition · GPS-tagged multi-channel alerts · operator command center
 
-## Table of Contents
-
-- [Features](#features)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Project Structure](#project-structure)
-- [API Overview](#api-overview)
-- [Testing](#testing)
-- [Docker](#docker)
-- [Documentation](#documentation)
-- [License](#license)
+[Quick start](#-run-it-in-one-command) · [How it works](#-how-it-works) · [Dashboard tour](#-dashboard-tour) · [Five-minute demo](#-five-minute-demo) · [Docs](#-documents)
 
 ---
 
-## Features
+> **Why is this hard?** A camera sees everything and tells almost no one. Frames scroll past; a watchlisted face, a weapon, or someone loitering at a gate is easy to miss until it is too late. When something *is* noticed, operators still need the clip, the place, and a usable alert — not a silent log line.
+>
+> **Aegis answers one question, in real time:** *who (or what) is on this camera right now, should we care, and where exactly is it?*
 
-### Computer Vision Pipeline
+| 6 staged CV pipeline | Watchlist face match (DB encodings) | GPS on every critical alert | Multi-channel dispatch | 184 automated tests |
+| --- | --- | --- | --- | --- |
+| Detect → track → recognize → behave → analyze → output | YuNet + dlib encodings in Postgres / SQLite | Camera lat/lng + Maps link | Sound · DB · audit · WebSocket · webhooks · officers | Unit + integration, CI coverage gate |
 
-| Capability | Description |
-|------------|-------------|
-| **Human detection** | YOLOv8 person detection with configurable confidence |
-| **Weapon detection** | Custom YOLO model for firearm / weapon identification |
-| **Vehicle detection** | Vehicle tracking with opt-in ANPR (plate OCR, confirmed by multi-read voting per vehicle) |
-| **Face recognition** | Watchlist matching against face encodings stored in PostgreSQL (SQLite for local demos) |
-| **Behavior analysis** | Loitering, rapid movement, erratic motion (judged in metres, scaled by person height), pose estimation |
-| **Anomaly detection** | Zone-based crowd and dwell-time anomalies |
-| **Analytics** | Per-camera occupancy heatmap, dwell time, and line-crossing in/out counts |
+---
 
-### Alerting & Security
+## The problem and how we answer it
 
-- Automated watchlist alerts across sound, DB, audit, WebSocket, and webhooks
-- GPS coordinates and Google Maps link on every critical alert
-- Throttled evidence snapshots (optional AES-256-GCM encryption)
-- Full audit trail for evidence saves and auth events
-- Optional Slack / Discord / custom webhook dispatch, HMAC-signed when `WEBHOOK_SIGNING_SECRET` is set
+| The problem | What Aegis does | Where to see it |
+| --- | --- | --- |
+| Cameras produce video, not decisions | A **6-stage pipeline** scores people, vehicles, weapons, faces, and behavior on every frame | Live monitoring · pipeline HUD |
+| A match is useless without identity | **Watchlist face recognition** against encodings stored in the database | Watchlist · Face registry |
+| Alerts without location waste response time | Every critical event carries **camera GPS** and a Google Maps link | Ops map · critical banner |
+| One channel fails, the event is lost | **NotificationHub** fans out to DB, audit log, WebSocket, optional webhooks / SMS | Alert center · audit log |
+| Operators need more than a toast | Evidence snapshots, chain-of-custody, incidents, reports, DVR segments | Evidence · Incidents · Reports |
+| External freeze / notify must not be silent automation | Watchlist hits can require **operator review** before outbound webhooks | Triage · redispatch |
+| Multi-site cameras are messy | Webcam, file, RTSP, and **multi-camera** YAML with env-substituted URLs | Cameras · `config/cameras.yaml` |
 
-### Operator Dashboard
+**Hero workflow:** a demo clip (or live camera) runs through the pipeline. A watchlisted face is matched; the HUD flashes; the hub posts to the API with GPS; the dashboard plays a sound, shows a red banner, drops a map pin, and stores evidence — while an audit row records who saw what.
 
-Live monitoring, alert center, watchlist, evidence, map, cameras, vehicles, incidents, analytics, reports, users, and settings — with WebSocket push, critical banners, and browser notifications.
+---
 
-### Multi-Camera Input
+## How it works
 
-- Webcam, video file, or RTSP / IP camera
-- Multi-camera mode via `config/cameras.yaml`
-- RTSP reconnect with configurable transport (`tcp` / `udp`)
-- Optional ONVIF PTZ and continuous DVR segment recording
+### One frame, start to finish
+
+```mermaid
+flowchart LR
+    A["📹 Camera / video / RTSP"] --> B["🏭 SurveillancePipeline"]
+    B --> C["1️⃣ Detection<br/>people · weapons · vehicles"]
+    C --> D["2️⃣ Tracking<br/>Deep SORT / ByteTrack"]
+    D --> E["3️⃣ Recognition<br/>watchlist faces"]
+    E --> F["4️⃣ Behavior<br/>loiter · pose · ANPR · anomaly"]
+    F --> G["5️⃣ Analytics<br/>heatmap · dwell · crossings"]
+    G --> H["6️⃣ Output<br/>HUD · evidence · alerts"]
+    H --> I["🔔 NotificationHub"]
+    I --> J["POST /api/v1/alerts/dispatch"]
+    J --> K[("PostgreSQL / SQLite")]
+    J --> L["WebSocket"]
+    L --> M["🖥️ Operator dashboard"]
+```
+
+### What the camera and the operator each see
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Cam as Camera / video
+    participant Pipe as CV pipeline
+    participant Hub as NotificationHub
+    participant API as FastAPI dispatcher
+    actor Op as Operator
+
+    Cam->>Pipe: frame
+    Pipe->>Pipe: detect → track → recognize → behavior
+    alt watchlist / weapon / critical event
+        Pipe->>Hub: throttled alert + GPS
+        Hub->>API: POST /alerts/dispatch
+        API->>API: DB · audit · optional webhooks
+        API-->>Op: WebSocket push
+        Op->>Op: banner · sound · map pin · evidence
+    else routine traffic
+        Pipe-->>Op: live MJPEG stream (people boxes / full HUD)
+    end
+```
+
+### Alert types the hub knows how to fire
+
+| Type | Typical trigger | Severity |
+| --- | --- | --- |
+| `CRIMINAL_DETECTED` | Face match against a watchlisted identity | Critical (review before outbound webhooks) |
+| `WEAPON_DETECTED` | Weapon YOLO above threshold | Critical |
+| `FIRE_SMOKE_DETECTED` | Fire / smoke detector | Critical |
+| `FALL_SUSPECTED` | Pose / fall heuristics | High |
+| `SUSPICIOUS_BEHAVIOR` | Loitering, rapid / erratic motion | High |
+| `SUSPICIOUS_VEHICLE` | Vehicle + ANPR / rules | High |
+
+---
+
+## Dashboard tour
+
+| Surface | What it does |
+| --- | --- |
+| **Overview** | System health, model status, cameras online, “needs attention” (missing weapon/vehicle weights, etc.) |
+| **Live monitoring** | MJPEG stream from the pipeline (`STREAM_HUD=clean\|full`) with critical banners and browser notifications |
+| **Detection / Triage** | Alert queue with severity, camera, GPS, redispatch after human review |
+| **Watchlist · Face registry** | Manage identities and encodings; ingest from `data/watchlist/` |
+| **Evidence** | Snapshots with optional AES-256-GCM encryption and custody trail |
+| **Map** | Camera pins and alert geotags (Leaflet) |
+| **Cameras · Zone editor** | Registry, GPS, zones / lines for analytics |
+| **Vehicles** | Tracks and optional plate OCR (multi-read voting) |
+| **Incidents · Reports** | Case-style grouping and incident report API |
+| **Analytics** | Occupancy heatmap, dwell, line-crossing in/out |
+| **Users · Settings** | JWT roles, retention, stream / DVR / webhook knobs |
+| **Copilot · Command palette** | Fast operator shortcuts inside the command center |
 
 ---
 
@@ -65,198 +124,101 @@ Live monitoring, alert center, watchlist, evidence, map, cameras, vehicles, inci
 ```mermaid
 flowchart TB
     subgraph Input
-        CAM[Webcam / RTSP / Video File]
+        CAM[Webcam · RTSP · Video file]
+        YAML[config/cameras.yaml · config.yaml · models.yaml]
     end
 
-    subgraph Pipeline["CV Pipeline (main.py)"]
-        D[Detection] --> T[Tracking]
-        T --> R[Recognition]
-        R --> B[Behavior]
-        B --> A[Analytics]
-        A --> O[Output]
+    subgraph Core["core/ — CV"]
+        FAC[factory.build_pipeline]
+        STG[6 PipelineStage modules]
+        WRK[camera_worker · face_worker]
     end
 
-    subgraph Backend["FastAPI Backend"]
-        AD[Alert Dispatcher]
-        DB[(PostgreSQL / SQLite)]
-        WS[WebSocket]
+    subgraph API["backend/ — FastAPI"]
+        DISP[alert_dispatcher]
+        AUTH[JWT · roles · lockout]
+        WS[WebSocket manager]
+        MET[/metrics Prometheus/]
     end
 
-    subgraph Frontend["React Dashboard"]
-        UI[Operator UI]
+    subgraph UI["frontend/ — React + Vite"]
+        DASH[Operator command center]
     end
 
-    CAM --> Pipeline
-    O -->|HTTP| AD
-    AD --> DB
-    AD --> WS
-    WS --> UI
-    O -->|Evidence| DB
+    CAM --> WRK --> STG
+    YAML --> FAC --> STG
+    STG --> DISP
+    DISP --> WS --> DASH
+    DISP --> AUTH
+    DISP --> MET
 ```
 
-**Pipeline stages:** Detection → Tracking → Recognition → Behavior → Analytics → Output
+| Layer | Choice |
+| --- | --- |
+| Vision | OpenCV, YOLOv8 (+ pose), YuNet face detect, dlib encodings, Deep SORT / ByteTrack, EasyOCR (ANPR) |
+| Pipeline | Modular stages in `core/pipeline/stages/`, composition root in `core/app/factory.py` |
+| API | FastAPI, SQLAlchemy, Alembic, JWT, AES-256-GCM evidence, optional Redis |
+| Dashboard | React 19, Vite 8, Leaflet |
+| Ops | `./run.sh`, Make, Docker Compose, GitHub Actions (ruff + pytest coverage gate) |
 
-Stages live under `core/pipeline/stages/` and share a `FrameContext`, so each stage is independently testable and configurable.
-
-**Alert path:** `OutputStage` → `NotificationHub` → `POST /api/v1/alerts/dispatch` → DB + audit + WebSocket + GPS + optional webhooks.
+```
+aegis/
+├── main.py                 # CLI: single / multi camera, video, headless
+├── run.sh                  # one command: API + pipeline + dashboard
+├── paths.py                # single source for data/ paths
+├── core/                   # detectors, tracking, recognition, analysis, pipeline
+├── backend/                # REST, WebSocket, alert dispatcher, auth, services
+├── frontend/               # operator UI (pages, hooks, services)
+├── utils/alerts/           # NotificationHub + event publisher
+├── config/                 # config.yaml, cameras.yaml, models.yaml
+├── data/watchlist/         # face images → DB encodings
+├── data/demo/clips/        # demo video (sample.mp4)
+├── scripts/                # setup, ingest, seed, evaluate, docker-up
+├── docs/                   # architecture, defense, development
+└── tests/                  # pytest (184 collected)
+```
 
 ---
 
-## Tech Stack
+## Run it in one command
 
-| Layer | Technologies |
-|-------|--------------|
-| **Computer Vision** | OpenCV, YOLOv8 + YOLOv8-pose (Ultralytics), face_recognition, EasyOCR, Deep SORT or ByteTrack |
-| **Backend** | FastAPI, SQLAlchemy, PostgreSQL, JWT, AES-256-GCM |
-| **Frontend** | React 19, Vite 8 |
-| **Infrastructure** | Docker Compose, Redis (optional), nginx (`frontend/nginx.conf`) |
-| **Testing** | pytest, GitHub Actions CI |
-
----
-
-## Prerequisites
-
-| Requirement | Version / notes |
-|-------------|-----------------|
-| Python | 3.10+ |
-| Node.js | 18+ |
-| PostgreSQL | 14+ (optional — SQLite works for local demos) |
-| Model weights | Place under `models/` (see below) |
-
-**Model weights** (not shipped in the repo):
-
-| File | Purpose |
-|------|---------|
-| `models/yolov8s.pt` | Human detection |
-| `models/weapon_yolo.pt` | Weapon detection |
-| `models/yolov8l.pt` | Vehicle detection |
-
----
-
-## Installation
-
-### 1. Clone
+**Requirements:** Python **3.10–3.12** (not 3.13+), Node 18+, macOS or Linux. Postgres is optional for local demos (`USE_SQLITE=true` by default).
 
 ```bash
-git clone https://github.com/devXsadik/final-year-project.git
-cd final-year-project
-```
+git clone https://github.com/0xdevabir/aegis-vision.git && cd aegis-vision
 
-### 2. First-time setup
+./scripts/setup.sh          # first time (or: make setup)
+# For a zero-Postgres demo, keep USE_SQLITE=true in .env (default)
 
-```bash
-./scripts/setup.sh
-# or: make setup
-```
-
-Setup will:
-
-1. Create the PostgreSQL database (when `psql` is available)
-2. Copy `.env.example` → `.env`
-3. Install Python dependencies from `requirements.txt`
-4. Initialize the database schema
-5. Ingest watchlist faces from `data/watchlist/`
-6. Create the admin user (password printed once, or set `ADMIN_PASSWORD`)
-7. Sync camera GPS into the database
-
-For a zero-Postgres local demo, keep `USE_SQLITE=true` in `.env` (default in `.env.example`).
-
-### 3. Frontend dependencies
-
-```bash
 cd frontend && npm install && cd ..
+# Place a short MP4 at data/demo/clips/sample.mp4 (recommended)
+
+./run.sh                    # or: make run
+# ./run.sh path/to/video.mp4
+# ./run.sh --no-pipeline    # API + dashboard only
 ```
 
-### 4. Demo video (recommended)
+Then open **http://localhost:5173** (dashboard) and **http://localhost:8000/docs** (API). The admin password is printed once by setup / `scripts/seed_demo.py` (or set `ADMIN_PASSWORD`).
 
-Place a short MP4 at:
+| Command | Purpose |
+| --- | --- |
+| `make stop` | Free ports `:8000` and `:5173` |
+| `make test` | `pytest tests/unit/ -v` |
+| `make backend` / `make pipeline` / `make frontend` | Run each process alone |
+| `make ingest` | Re-ingest watchlist faces |
+| `make docker-up` | Full stack via Compose (Postgres, Redis, API, pipeline, dashboard) |
 
-```
-data/demo/clips/sample.mp4
-```
-
----
-
-## Run with Docker
-
-One command brings up the whole stack: PostgreSQL, Redis, the API, the AI pipeline and the dashboard.
+### Docker (full stack)
 
 ```bash
 cp .env.example .env
-# Edit .env: set POSTGRES_PASSWORD, SECRET_KEY, ENCRYPTION_KEY, ENCRYPTION_SALT, INTERNAL_API_KEY
-#   python -c "import secrets; print(secrets.token_urlsafe(48))"   # generate each one
-# Optionally set ADMIN_PASSWORD (otherwise one is generated: docker compose logs backend)
+# Set POSTGRES_PASSWORD, SECRET_KEY, ENCRYPTION_KEY, ENCRYPTION_SALT, INTERNAL_API_KEY
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
 docker compose up -d --build
+# Dashboard: http://localhost:8080
 ```
 
-Open **http://localhost:8080** and sign in as `admin`. The first build takes several minutes
-(it compiles dlib and downloads CPU-only PyTorch); later starts take seconds.
-
-| Command | What it does |
-|---|---|
-| `docker compose logs -f backend pipeline` | Watch the API / AI workers |
-| `make docker-admin` | Reset the admin password |
-| `docker compose down` | Stop (data is kept in volumes); add `-v` to wipe it |
-
-Notes:
-- **Cameras:** a container cannot open your laptop's webcam. Use RTSP/HTTP cameras in
-  `config/cameras.yaml` (mounted into the container and re-read every few seconds).
-- **Models:** drop `weapon_yolo.pt` etc. into `./models/` (mounted). The pose model downloads on first start.
-- **Secrets:** the containers refuse to start with missing or default secrets.
-- **GPU:** the image is CPU-only. On Apple silicon, running natively with `./run.sh` is faster (uses the Apple GPU).
-- Only the dashboard port is published; the API is reached through it (`/api`, `/docs`, `/health`).
-
----
-
-## Quick Start
-
-**One command** — backend + CV pipeline + dashboard:
-
-```bash
-./run.sh
-# or: make run
-```
-
-| Service | URL |
-|---------|-----|
-| Dashboard | http://localhost:5173 |
-| API docs | http://localhost:8000/docs |
-| Login | `admin` / password printed by `scripts/seed_demo.py` (or `ADMIN_PASSWORD`) |
-
-```bash
-./run.sh path/to/video.mp4   # custom video (plays at its own frame rate, looped)
-./run.sh --no-pipeline       # API + dashboard only
-make stop                    # free ports :8000 and :5173
-```
-
-`run.sh` always uses the project's own `.venv` (created on first run with Python 3.10–3.12) and runs
-`scripts/check_env.py` first, so a broken system/conda Python can't take the backend down.
-
-**Troubleshooting**
-
-| Symptom | Fix |
-|---|---|
-| `Unable to open ...shape_predictor_68_face_landmarks.dat` / torch `libtorch_cpu.dylib` errors | You are on a broken Python. Delete nothing — just run `./run.sh`; it uses `.venv` |
-| Forgot the admin password (it is printed only once) | `python scripts/seed_demo.py --reset-password` |
-| Old recordings disappear | DVR retention deletes files older than `DVR_RETENTION_HOURS` (default 48). Set `0` to disable |
-| Weapon / vehicle detection "OFF" | Add `models/weapon_yolo.pt` / `models/yolov8l.pt` — see Overview → Needs attention |
-
-**Makefile shortcuts:**
-
-```bash
-make setup      # Full setup
-make run        # Start full system
-make stop       # Stop :8000 and :5173
-make test       # Unit tests
-make backend    # FastAPI only
-make pipeline   # CV pipeline on demo video
-make frontend   # React dev server
-make ingest     # Re-ingest watchlist faces
-```
-
----
-
-## Usage
+Host webcam into Docker: `make webcam-bridge` (HTTP bridge on `:8090`). Drop model weights into `./models/` (mounted). Lost admin password: `make docker-admin`.
 
 ### Manual (three terminals)
 
@@ -266,48 +228,50 @@ python main.py --video data/demo/clips/sample.mp4
 cd frontend && npm run dev
 ```
 
-### Webcam
+| Source | Command |
+| --- | --- |
+| Demo video | `python main.py --video data/demo/clips/sample.mp4` |
+| Webcam | `python main.py` |
+| Multi-camera RTSP | `python main.py --multi` (edit `config/cameras.yaml`) |
+| Headless | `python main.py --multi --no-display` or `HEADLESS=true …` |
+
+**Pipeline keys:** `Q` quit · `S` per-stage stats · `T` thermal overlay.
+
+### Watchlist
 
 ```bash
-python main.py
-```
-
-### Multi-camera (RTSP / IP)
-
-```bash
-python main.py --multi
-```
-
-Configure cameras in `config/cameras.yaml`. Use `${RTSP_GATE_1}` placeholders resolved from `.env`.
-
-### Headless
-
-```bash
-python main.py --multi --no-display
-# or
-HEADLESS=true python main.py --video data/demo/clips/sample.mp4
-```
-
-### Pipeline keyboard shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Q` | Quit |
-| `S` | Print per-stage timing stats |
-| `T` | Toggle thermal camera view |
-
-### Watchlist management
-
-```bash
-# 1. Add images under data/watchlist/CRIMINAL_XXX_Name/
-# 2. Convert HEIC if needed
-python scripts/convert_heic.py
-
-# 3. Ingest encodings
+# data/watchlist/CRIMINAL_001_Name/*.jpg
+python scripts/convert_heic.py          # if needed
 python scripts/ingest_watchlist.py
 ```
 
-### Pipeline evaluation
+### Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `shape_predictor_68_face_landmarks.dat` / `libtorch_cpu` errors | Use `./run.sh` — it always uses `.venv`, not a random system Python |
+| Forgot admin password | `python scripts/seed_demo.py --reset-password` |
+| Old recordings gone | `DVR_RETENTION_HOURS` (default 48); set `0` to keep |
+| Weapon / vehicle “OFF” | Add `models/weapon_yolo.pt` / `models/yolov8l.pt` |
+| Alerts not reaching the API | `INTERNAL_API_KEY` must match in `.env` for pipeline and backend |
+
+---
+
+## Five-minute demo
+
+Keep the dashboard open at http://localhost:5173 and the pipeline window visible.
+
+| Time | Beat |
+| --- | --- |
+| **0:00** | **Problem:** cameras stream; operators still miss the moment. Open Overview — models, cameras, health. |
+| **0:30** | **Pipeline:** `./run.sh` (or demo MP4). Point at Detection → Tracking → Recognition stages; press `S` for timings. |
+| **1:30** | **Watchlist hit:** a known face matches → HUD “CRIMINAL ALERT”, sound, DB row, audit `AUTO_ALERT`. |
+| **2:15** | **Dashboard:** critical banner, browser notification, Events / Triage, map pin with Maps link. |
+| **3:00** | **Evidence:** snapshot + custody; show `/api/v1/alerts/` in Swagger if needed. |
+| **3:45** | **Trust:** JWT login, roles, review-before-webhook for watchlist hits, append-style audit. |
+| **4:30** | **Close:** modular CV + operator loop — detect, locate, alert, review — not a silent DVR. |
+
+Full talking points and viva backup: [`docs/DEFENSE.md`](docs/DEFENSE.md).
 
 ```bash
 python scripts/evaluate_pipeline.py \
@@ -320,175 +284,97 @@ python scripts/evaluate_pipeline.py \
 
 ## Configuration
 
-### Environment (`.env`)
+Copy `.env.example` → `.env`. Important variables:
 
-Copy from `.env.example`. Minimum variables:
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL or SQLite connection string |
-| `USE_SQLITE` | `true` for local zero-setup demos |
-| `SECRET_KEY` | JWT signing key (64+ chars in production) |
-| `ENCRYPTION_KEY`, `ENCRYPTION_SALT` | AES-256-GCM evidence encryption (both required, no built-in default) |
-| `METRICS_TOKEN` | Bearer token for Prometheus to scrape `/api/v1/metrics` (otherwise admin login only) |
-| `WEBHOOK_SIGNING_SECRET` | Signs outbound webhooks: `X-Aegis-Signature: sha256=HMAC(secret, "<X-Aegis-Timestamp>.<body>")` |
-| `INTERNAL_API_KEY` | Pipeline ↔ backend auth (**must match both sides**) |
-| `BACKEND_URL` | Backend URL for pipeline event publishing |
-| `RTSP_*` | IP camera stream URLs |
-
-### YAML
+| Variable | Role |
+| --- | --- |
+| `DATABASE_URL` / `USE_SQLITE` | Postgres or local SQLite demo |
+| `SECRET_KEY` | JWT signing |
+| `ENCRYPTION_KEY` + `ENCRYPTION_SALT` | AES-256-GCM evidence (both required; no silent default) |
+| `INTERNAL_API_KEY` | Pipeline ↔ backend (must match) |
+| `BACKEND_URL` | Where the pipeline posts events |
+| `WEBHOOK_SIGNING_SECRET` | `X-Aegis-Signature: sha256=HMAC(…)` on outbound webhooks |
+| `METRICS_TOKEN` | Bearer for Prometheus `/api/v1/metrics` |
+| `STREAM_*` / `DVR_*` | Live MJPEG quality and continuous recording retention |
+| Camera GPS | `config/cameras.yaml` or `config/config.yaml` → `camera_lat` / `camera_lng` |
 
 | File | Purpose |
-|------|---------|
-| `config/config.yaml` | Pipeline settings, thresholds, default camera GPS |
-| `config/cameras.yaml` | Multi-camera RTSP sources + per-camera GPS |
-| `config/models.yaml` | Model registry (paths, tolerances, OCR languages) |
+| --- | --- |
+| `config/config.yaml` | Thresholds, behavior, default GPS, device |
+| `config/cameras.yaml` | Multi-cam RTSP / indexes (`${RTSP_GATE_1}` from `.env`) |
+| `config/models.yaml` | Model paths, face tolerance, OCR languages |
 
-### Watchlist layout
-
-```
-data/watchlist/
-├── CRIMINAL_001_Sadik/
-│   ├── photo1.jpg
-│   └── photo2.jpg
-├── CRIMINAL_002_Tarik/
-│   └── photo1.jpg
-└── manifest.json          # optional metadata
-```
-
-Register display names under `criminal_names` in `config/config.yaml`.
+**Model weights** under `models/` (examples): `yolov8s.pt` (people), `yolov8n-pose.pt`, `weapon_yolo.pt`, `yolov8l.pt` (vehicles), `face_detection_yunet_2023mar.onnx` (fetched by `ensure_local_env.py`).
 
 ---
 
-## Project Structure
+## API overview
 
-```
-├── main.py                     # CLI entrypoint
-├── paths.py                    # Central path constants
-├── run.sh                      # One-command full system
-├── Makefile                    # Common commands
-│
-├── core/                       # Computer vision
-│   ├── app/                    # Pipeline factory
-│   ├── detectors/              # YOLO human / weapon / vehicle
-│   ├── tracking/               # Multi-object trackers
-│   ├── recognition/            # DB-backed face recognition
-│   ├── analysis/               # Behavior, pose, ANPR, anomaly
-│   ├── pipeline/               # Stage orchestration
-│   ├── runtime/                # Camera worker loop
-│   └── visualization/          # HUD rendering
-│
-├── backend/                    # FastAPI REST + WebSocket API
-│   ├── api/                    # Route handlers
-│   ├── services/               # Alert dispatcher
-│   ├── models/                 # SQLAlchemy models
-│   └── auth/                   # JWT authentication
-│
-├── frontend/                   # React operator dashboard
-│   └── src/
-│       ├── components/
-│       ├── hooks/
-│       ├── pages/
-│       └── services/
-│
-├── utils/                      # Shared utilities
-│   ├── alerts/                 # Notification hub, event publisher
-│   ├── config/                 # Config loaders, camera registry
-│   ├── data/                   # Evidence, reports, retention
-│   ├── media/                  # Video / RTSP sources
-│   └── system/                 # Logging, performance
-│
-├── data/
-│   ├── watchlist/              # Face images for ingest
-│   ├── demo/clips/             # Demo videos
-│   └── results/                # Evaluation output
-│
-├── config/                     # YAML configuration
-├── scripts/                    # Setup, seed, evaluate, deploy
-├── docs/                       # Architecture, defense, development
-└── tests/unit/                 # pytest suite
-```
+All routes under `/api/v1/`. Interactive docs: http://localhost:8000/docs
+
+| Area | Examples |
+| --- | --- |
+| Auth | `POST /auth/login` |
+| Alerts | `POST /alerts/dispatch` (internal), list / redispatch / triage |
+| Cameras · Map | `GET /cameras`, `GET /map/cameras` |
+| Evidence · Custody | evidence upload/list, chain-of-custody |
+| Faces · Watchlist | registry CRUD, ingest-backed encodings |
+| Reports · Incidents | `GET /reports/incident`, incident workflows |
+| Stream · VMS · DVR | live MJPEG, recordings, retention |
+| System · Metrics | status heartbeat, Prometheus text |
 
 ---
 
-## API Overview
+## Trust and limits
 
-All routes are prefixed with `/api/v1/`. Interactive docs: http://localhost:8000/docs
+Guardrails that matter in a surveillance system:
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /auth/login` | Operator authentication |
-| `GET /alerts` | Alert history |
-| `POST /alerts/dispatch` | Internal alert dispatch (pipeline) |
-| `GET /faces` | Known persons / watchlist |
-| `GET /evidence` | Evidence records |
-| `GET /cameras` | Camera registry with GPS |
-| `GET /map/cameras` | Map-ready camera pins |
-| `GET /reports/incident` | Incident report |
-| `WS /ws/alerts` | Live alert stream |
-| `WS /ws/status` | System status stream |
-| `GET /health` | Health check |
+| Guardrail | How it shows up |
+| --- | --- |
+| AuthN / AuthZ | JWT, role checks, login lockout, rate limiting |
+| Audit | Auto-alerts and sensitive actions written to `audit_logs` |
+| Review before blast radius | `CRIMINAL_DETECTED` can require operator review before external webhooks |
+| Evidence integrity | Snapshots + optional encryption; custody service |
+| Secrets | No baked-in production keys; `.env.example` documents required values |
+| Face process isolation | Face workers run out-of-process by default (dlib + PyTorch/MPS in one process can segfault) |
 
----
+**Stated plainly — what this is not:**
 
-## Testing
-
-```bash
-pytest tests/unit/ -v
-# or: make test
-```
-
-CI runs on push via GitHub Actions (`.github/workflows/ci.yml`).
+- **A thesis / prototype platform**, not a certified physical-security product. Multi-camera is a threaded single-node design; Redis is optional HA scaffolding, not a full bus yet.
+- **Detection quality depends on your models, lighting, and camera angle.** Thresholds in YAML must be tuned; false positives are expected and throttled, not eliminated.
+- **Watchlist matching is only as good as the enrolled faces.** Privacy: match enrolled identities; keep retention and external webhooks off until you intend them.
+- **Browser live view is MJPEG from the pipeline**, not a full VMS client; production browser fan-out may need a dedicated media path.
 
 ---
 
-## Docker
-
-```bash
-cp .env.example .env    # set secrets first
-docker compose up -d
-```
-
-| Container | Port | Role |
-|-----------|------|------|
-| `surveillance_db` | 5433 | PostgreSQL |
-| `surveillance_redis` | 6379 | Redis |
-| `surveillance_backend` | 8000 | FastAPI API |
-| `surveillance_main` | — | CV pipeline (demo video) |
-
----
-
-## Documentation
+## Documents
 
 | Document | Description |
-|----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, data flow, module map |
-| [docs/DEFENSE.md](docs/DEFENSE.md) | Graduation demo script and checklist |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Developer setup and conventions |
-| [AGENTS.md](AGENTS.md) | Contributor / agent quick reference |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layout, data flow, stage list, alert path |
+| [`docs/DEFENSE.md`](docs/DEFENSE.md) | Graduation demo script, backups, viva Q&A |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Developer setup and conventions |
+| [`AGENTS.md`](AGENTS.md) | Contributor / coding-agent quick reference |
+| [`.env.example`](.env.example) | Every environment knob |
 
 ---
 
-## Alert Flow
+## Impact
 
-When a watchlisted person is detected on **any camera**:
-
-1. **Pipeline** — red HUD banner, alarm sound, evidence snapshot
-2. **NotificationHub** — `POST /api/v1/alerts/dispatch` with GPS
-3. **Alert Dispatcher** — DB save, audit log, WebSocket broadcast
-4. **Dashboard** — sound, critical banner, browser notification, map pin
-5. **Webhooks** — optional external dispatch (Slack, Discord, etc.)
+- **Operators:** one place for live video, ranked alerts, map context, and evidence — not three tools and a radio delay.
+- **Security teams:** watchlist and weapon events land with GPS and an audit trail, with human review before irreversible outbound notify.
+- **Builders / researchers:** a modular CV pipeline you can time, extend, and evaluate (`evaluate_pipeline.py`) beside a real FastAPI + React command center.
 
 ---
 
 ## Contributing
 
-This is a final-year academic project. Issues and pull requests are welcome.
-
----
+Issues and pull requests are welcome. Run `make test` (and keep `INTERNAL_API_KEY` consistent) before you push. CI: `.github/workflows/ci.yml`.
 
 ## License
 
-Academic / final-year project — see repository owner for usage terms.
+Academic / project use — see the repository owner for terms.
 
-**Aegis** — AI Smart Surveillance System
+---
+
+*Aegis: the camera already saw it — make sure the right people do too.*

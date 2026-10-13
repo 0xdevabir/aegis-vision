@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Icons, Tag, Empty, Seg, Modal, useConfirm } from '../components/ui'
+import { Card, Icons, Tag, Empty, Seg, Modal, Stat, useConfirm } from '../components/ui'
 import { resolveIp, addCamera, updateCamera, liveStreamUrl, deleteCamera, fetchUsers, fetchCameraOfficerMap, setCameraOfficers } from '../services/api'
 import { useToast } from '../components/Toast'
 import { can } from '../lib/permissions'
@@ -7,26 +7,84 @@ import { can } from '../lib/permissions'
 // Status comes only from what the system really knows: the pipeline heartbeat and the enabled flag.
 function healthOf(cam, live) {
   if (live) return { label: 'Streaming', tone: 'ok' }
-  if (cam.active) return { label: 'Enabled, no signal', tone: 'warn' }
-  return { label: 'Off', tone: 'danger' }
+  if (cam.active) return { label: 'No signal', tone: 'warn' }
+  return { label: 'Turned off', tone: 'danger' }
 }
 
 const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+const EMPTY_FORM = { camera_id: '', name: '', location: '', lat: '', lng: '', rtsp_url: '' }
+
+// '' → null (not set); anything else must be a number inside the range.
+function parseCoord(value, limit) {
+  if (String(value).trim() === '') return { value: null }
+  const n = Number(value)
+  return Number.isFinite(n) && Math.abs(n) <= limit ? { value: n } : { error: true }
+}
+
+const fmtGps = (cam) => (cam.lat != null && cam.lng != null ? `${Number(cam.lat).toFixed(4)}, ${Number(cam.lng).toFixed(4)}` : '—')
 
 export function Cameras({ ctx }) {
   const { cameras, systemStatus, reloadCameras, me } = ctx
   const { push: toast } = useToast()
   const [ask, confirmDialog] = useConfirm()
   const [view, setView] = useState('grid')
-  
-  // Add Camera State
+  const isAdmin = me?.role === 'admin'
+  const canManage = can(me?.role, 'camera.manage')
+
   const [showAdd, setShowAdd] = useState(false)
-  const [addForm, setAddForm] = useState({ ipLink: '', camera_id: '', name: '', location: '', lat: '', lng: '', rtsp_url: '' })
+  const [addForm, setAddForm] = useState(EMPTY_FORM)
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
+  const setField = (key) => (e) => setAddForm((f) => ({ ...f, [key]: e.target.value }))
+  const closeAdd = () => { setShowAdd(false); setAddForm(EMPTY_FORM); setAddError('') }
+
+  const lookUpLocation = async () => {
+    setAddLoading(true); setAddError('')
+    try {
+      const res = await resolveIp(addForm.rtsp_url)
+      setAddForm((f) => ({
+        ...f,
+        location: f.location || res.location || '',
+        lat: f.lat !== '' ? f.lat : (res.lat ?? ''),
+        lng: f.lng !== '' ? f.lng : (res.lng ?? ''),
+      }))
+      if (res.error === 'private range') setAddError('This is a local network address, so its location cannot be looked up. Enter it by hand.')
+      else if (res.error) setAddError(`Could not look up the location: ${res.error}`)
+    } catch (e) {
+      setAddError(`Could not look up the location: ${e.message}`)
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
+  const saveCamera = async () => {
+    const lat = parseCoord(addForm.lat, 90)
+    const lng = parseCoord(addForm.lng, 180)
+    if (lat.error || lng.error) { setAddError('Latitude must be between -90 and 90, and longitude between -180 and 180.'); return }
+    if ((lat.value == null) !== (lng.value == null)) { setAddError('Enter both latitude and longitude, or leave both empty.'); return }
+    const cameraId = slug(addForm.camera_id || addForm.name)
+    if (!cameraId) { setAddError('The camera ID needs at least one letter or number.'); return }
+    setAddLoading(true); setAddError('')
+    try {
+      await addCamera({
+        camera_id: cameraId,
+        name: addForm.name.trim(),
+        location: addForm.location.trim(),
+        lat: lat.value,
+        lng: lng.value,
+        rtsp_url: addForm.rtsp_url.trim(),
+      })
+      toast(`Camera "${addForm.name.trim()}" added`, 'ok')
+      closeAdd()
+      reloadCameras?.()
+    } catch (e) {
+      setAddError(e.message || 'Could not add the camera')
+    } finally {
+      setAddLoading(false)
+    }
+  }
 
   const handleDelete = async (cam) => {
-    if (me?.role !== 'admin') { toast('Admin only', 'danger'); return }
     if (!(await ask({ title: 'Delete camera', message: `Delete camera ${cam.camera_id}? Its history stays, but it stops being monitored.`, confirmLabel: 'Delete', danger: true }))) return
     try {
       await deleteCamera(cam.camera_id)
@@ -45,8 +103,8 @@ export function Cameras({ ctx }) {
   const loadOfficers = () => fetchCameraOfficerMap().then(setOfficerMap).catch(() => {})
   useEffect(() => {
     loadOfficers()
-    if (me?.role === 'admin') fetchUsers().then((u) => setPoliceUsers(u.filter((x) => x.role === 'police' && x.is_active))).catch(() => {})
-  }, [me?.role, cameras.length])
+    if (isAdmin) fetchUsers().then((u) => setPoliceUsers(u.filter((x) => x.role === 'police' && x.is_active))).catch(() => {})
+  }, [isAdmin, cameras.length])
   const openAssign = (cam) => { setAssignCam(cam); setAssignIds((officerMap[cam.camera_id] || []).map((o) => o.id)) }
   const saveAssign = async () => {
     try {
@@ -58,10 +116,9 @@ export function Cameras({ ctx }) {
       toast(e.message || 'Assign failed', 'danger')
     }
   }
-  const officerNames = (cam) => (officerMap[cam.camera_id] || []).map((o) => o.name).join(', ') || 'none'
+  const officerNames = (cam) => (officerMap[cam.camera_id] || []).map((o) => o.name).join(', ') || 'None assigned'
 
   const handleToggle = async (cam) => {
-    if (me?.role !== 'admin') { toast('Admin only', 'danger'); return }
     if (cam.active && !(await ask({ title: 'Turn off camera', message: `Turn off "${cam.name || cam.camera_id}"? Detection and recording stop until it is turned back on.`, confirmLabel: 'Turn off', danger: true }))) return
     try {
       await updateCamera(cam.camera_id, {
@@ -70,9 +127,9 @@ export function Cameras({ ctx }) {
         active: !cam.active,
       })
       toast(cam.active ? 'Camera turned off' : 'Camera turned on', 'ok')
-      if (reloadCameras) reloadCameras()
+      reloadCameras?.()
     } catch (e) {
-      toast(`Failed to toggle: ${e.message}`, 'danger')
+      toast(`Could not change the camera: ${e.message}`, 'danger')
     }
   }
 
@@ -80,257 +137,184 @@ export function Cameras({ ctx }) {
 
   const rows = cameras.map((c) => {
     const live = liveIds.has(c.camera_id)
-    const h = healthOf(c, live)
     return {
       ...c,
       live,
-      health: h,
+      health: healthOf(c, live),
       fps: live ? systemStatus.cameras[c.camera_id]?.fps ?? null : null,
       threat: live ? systemStatus.cameras[c.camera_id]?.threat_score ?? null : null,
     }
   }).sort((a, b) => (b.live - a.live) || (b.active - a.active))
 
-  const online = rows.filter((r) => r.active).length
+  const enabled = rows.filter((r) => r.active).length
+  const streaming = rows.filter((r) => r.live).length
+
+  const actions = (cam) => (
+    <>
+      {isAdmin && <button className="btn btn-sm" onClick={() => handleToggle(cam)}>{cam.active ? 'Turn off' : 'Turn on'}</button>}
+      {isAdmin && <button className="btn btn-sm" onClick={() => openAssign(cam)}>Assign officers</button>}
+      {canManage && <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(cam)}>Delete</button>}
+    </>
+  )
 
   return (
     <>
-      <div className="grid grid-4" style={{ marginBottom: 14 }}>
-        <div className="stat accent-primary"><span className="label">Registered</span><span className="value">{rows.length}</span></div>
-        <div className="stat accent-ok"><span className="label">Online</span><span className="value">{online}</span></div>
-        <div className="stat accent-danger"><span className="label">Offline</span><span className="value">{rows.length - online}</span></div>
-        <div className="stat accent-cyan"><span className="label">Streaming to AI</span><span className="value">{rows.filter((r) => r.live).length}</span></div>
+      <div className="grid grid-4 mb">
+        <Stat label="Cameras" value={rows.length} delta="Registered in the system" accent="primary" icon={Icons.camera} />
+        <Stat label="Streaming" value={streaming} delta="Sending video to detection now" accent="ok" icon={Icons.live} />
+        <Stat label="No signal" value={enabled - streaming} delta="Turned on but not sending video" accent={enabled - streaming ? 'warn' : 'ok'} icon={Icons.alert} />
+        <Stat label="Turned off" value={rows.length - enabled} delta="Not monitored" accent={rows.length - enabled ? 'danger' : 'ok'} icon={Icons.eye} />
       </div>
 
       <Card
-        title="Camera Fleet"
-        sub="health, network & stream metrics"
+        title="Cameras"
+        sub="Status, location and assigned officers"
         actions={
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-              <Icons.camera /> Add Camera
-            </button>
+          <div style={{ display: 'flex', gap: 8 }}>
             <Seg value={view} onChange={setView} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
+            {canManage && (
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+                <Icons.camera /> Add camera
+              </button>
+            )}
           </div>
         }
-        flush={view === 'list'}
+        flush={view === 'list' && rows.length > 0}
       >
-        {rows.length === 0 && <Empty icon={Icons.camera}>No cameras registered. Add one using the button above.</Empty>}
+        {rows.length === 0 && (
+          <Empty icon={Icons.camera}>{canManage ? 'No cameras yet. Use "Add camera" to register the first one.' : 'No cameras have been registered yet.'}</Empty>
+        )}
 
-        {view === 'grid' ? (
+        {rows.length > 0 && view === 'grid' && (
           <div className="grid grid-3">
             {rows.map((cam) => (
-              <div key={cam.camera_id} className="card" style={{ boxShadow: 'none' }}>
-                <div className="cam-tile" style={{ borderRadius: 0, border: 'none', position: 'relative' }}>
+              <div key={cam.camera_id} className="fleet-card">
+                <div className="fleet-media">
+                  <div className="fleet-state"><Icons.camera /><span>{cam.health.label}</span></div>
                   {cam.live && (
                     <img
                       src={liveStreamUrl(cam.camera_id)}
-                      alt={cam.name || cam.camera_id}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
+                      alt={`Live view from ${cam.name || cam.camera_id}`}
                       onError={(e) => { e.target.style.display = 'none' }}
                     />
                   )}
-                  <div className="scanline" />
-                  <div className="cam-label" style={{ position: 'relative', zIndex: 2 }}>{cam.live && <span className="rec-dot" />}{cam.name || cam.camera_id}</div>
-                  {cam.active
-                    ? <div className="cam-stats" style={{ position: 'relative', zIndex: 2 }}><span>{cam.fps != null ? `${Number(cam.fps).toFixed(1)} FPS` : 'Waiting for signal'}</span>{cam.threat != null && <span>Threat {cam.threat}</span>}</div>
-                    : <div className="cam-offline" style={{ position: 'relative', zIndex: 2 }}><div>Signal lost</div></div>}
+                  {cam.live && cam.fps != null && <span className="cam-chip">{Number(cam.fps).toFixed(1)} fps</span>}
                 </div>
-                <div style={{ padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <b style={{ fontSize: '0.86rem' }}>{cam.name || cam.camera_id}</b>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <Tag tone={cam.health.tone}>{cam.health.label}</Tag>
-                      {can(me?.role, 'camera.manage') && <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(cam)}>Delete</button>}
-                  {me?.role === 'admin' && (
-                        <button className="btn btn-sm" onClick={() => handleToggle(cam)}>
-                          {cam.active ? 'Turn off' : 'Turn on'}
-                        </button>
-                      )}
-                    </div>
+                <div className="fleet-body">
+                  <div className="fleet-head">
+                    <b title={cam.name || cam.camera_id}>{cam.name || cam.camera_id}</b>
+                    <Tag tone={cam.health.tone}>{cam.health.label}</Tag>
                   </div>
-                  <div className="meta muted" style={{ fontSize: '0.74rem' }}>{cam.location || 'No location set'}</div>
-                  <div className="meta muted" style={{ fontSize: '0.74rem' }}>
-                    Officer: {officerNames(cam)}
-                    {me?.role === 'admin' && <button className="btn btn-sm btn-ghost" style={{ marginLeft: 6 }} onClick={() => openAssign(cam)}>Assign</button>}
-                  </div>
+                  <div className="fleet-meta">{cam.location || 'No location set'}</div>
+                  <div className="fleet-meta">Officers: {officerNames(cam)}</div>
+                  {(isAdmin || canManage) && <div className="fleet-actions">{actions(cam)}</div>}
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr><th>Camera</th><th>Location</th><th>Health</th><th>FPS</th><th>Threat</th><th>Officer</th><th>GPS</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((cam) => (
-                <tr key={cam.camera_id}>
-                  <td><b>{cam.name || cam.camera_id}</b><div className="meta mono">{cam.camera_id}</div></td>
-                  <td>{cam.location || '—'}</td>
-                  <td><Tag tone={cam.health.tone}>{cam.health.label}</Tag></td>
-                  <td>{cam.fps != null ? Number(cam.fps).toFixed(1) : '—'}</td>
-                  <td>{cam.threat != null ? cam.threat : '—'}</td>
-                  <td>{officerNames(cam)}</td>
-                  <td className="mono">{cam.lat != null ? `${cam.lat.toFixed(4)}, ${cam.lng.toFixed(4)}` : '—'}</td>
-                  <td>
-                    {can(me?.role, 'camera.manage') && <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(cam)}>Delete</button>}
-                  {me?.role === 'admin' && (
-                      <button className="btn btn-sm" onClick={() => handleToggle(cam)}>
-                        {cam.active ? 'Turn off' : 'Turn on'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        )}
+
+        {rows.length > 0 && view === 'list' && (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr><th>Camera</th><th>Location</th><th>Status</th><th>Frame rate</th><th>Threat score</th><th>Officers</th><th>GPS</th>{(isAdmin || canManage) && <th />}</tr>
+              </thead>
+              <tbody>
+                {rows.map((cam) => (
+                  <tr key={cam.camera_id}>
+                    <td><b>{cam.name || cam.camera_id}</b><div className="meta mono">{cam.camera_id}</div></td>
+                    <td>{cam.location || '—'}</td>
+                    <td><Tag tone={cam.health.tone}>{cam.health.label}</Tag></td>
+                    <td>{cam.fps != null ? `${Number(cam.fps).toFixed(1)} fps` : '—'}</td>
+                    <td>{cam.threat != null ? cam.threat : '—'}</td>
+                    <td>{officerNames(cam)}</td>
+                    <td className="mono">{fmtGps(cam)}</td>
+                    {(isAdmin || canManage) && <td><div className="cell-actions">{actions(cam)}</div></td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
       {assignCam && (
         <Modal
-          title={`Assign police officers: ${assignCam.name || assignCam.camera_id}`}
+          title={`Assign officers to ${assignCam.name || assignCam.camera_id}`}
           onClose={() => setAssignCam(null)}
           footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button className="btn" onClick={() => setAssignCam(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={saveAssign}>Save</button>
           </div>}
         >
-          {policeUsers.length === 0 && <div className="muted">No police users yet. Create one in Users (role: Police) with a phone number.</div>}
+          {policeUsers.length === 0 && <div className="muted">No police users yet. Create one on the Users page with the Police role and a phone number.</div>}
           {policeUsers.map((u) => (
             <label key={u.id} className="row" style={{ cursor: 'pointer' }}>
               <span>
                 <input type="checkbox" checked={assignIds.includes(u.id)}
                   onChange={(e) => setAssignIds((ids) => (e.target.checked ? [...ids, u.id] : ids.filter((i) => i !== u.id)))} />
-                {' '}<b>{u.username}</b> <span className="muted">{u.phone || 'no phone: SMS skipped'}</span>
-                {assignIds[0] === u.id && <Tag tone="ok">primary</Tag>}
+                {' '}<b>{u.username}</b> <span className="muted">{u.phone || 'No phone number, so no SMS'}</span>
+                {assignIds[0] === u.id && <> <Tag tone="ok">Primary</Tag></>}
               </span>
             </label>
           ))}
-          <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>The first selected officer is primary and gets the incident ticket. All selected officers are alerted.</div>
+          <p className="note">The first officer you select is the primary and receives the incident. Every selected officer is alerted.</p>
         </Modal>
       )}
 
       {showAdd && (
-        <Modal 
-          title="Add New Camera" 
-          onClose={() => setShowAdd(false)}
+        <Modal
+          title="Add camera"
+          onClose={closeAdd}
           footer={
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button className="btn" onClick={() => setShowAdd(false)}>Cancel</button>
-              <button 
-                className="btn btn-primary" 
-                onClick={async () => {
-                  try {
-                    setAddLoading(true)
-                    setAddError('')
-                    await addCamera({
-                      camera_id: addForm.camera_id,
-                      name: addForm.name,
-                      location: addForm.location,
-                      lat: parseFloat(addForm.lat) || null,
-                      lng: parseFloat(addForm.lng) || null,
-                      rtsp_url: addForm.rtsp_url
-                    })
-                    setShowAdd(false)
-                    if (reloadCameras) reloadCameras()
-                  } catch (e) {
-                    setAddError(e.message)
-                  } finally {
-                    setAddLoading(false)
-                  }
-                }}
-                disabled={addLoading || !addForm.camera_id || !addForm.name}
-              >
-                {addLoading ? 'Saving...' : 'Save Camera'}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn" onClick={closeAdd}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveCamera} disabled={addLoading || !addForm.name.trim()}>
+                {addLoading ? 'Saving…' : 'Add camera'}
               </button>
             </div>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {addError && <div className="alert alert-danger">{addError}</div>}
-            
-            <div className="form-group">
-              <label>IP Link (URL)</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  className="input" 
-                  style={{ flex: 1 }}
-                  placeholder="e.g. http://192.168.0.103:8080/video" 
-                  value={addForm.ipLink}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setAddForm({ 
-                      ...addForm, 
-                      ipLink: val,
-                      rtsp_url: val 
-                    })
-                  }}
-                />
-                <button 
-                  className="btn" 
-                  disabled={addLoading || !addForm.ipLink}
-                  onClick={async () => {
-                    try {
-                      setAddLoading(true)
-                      const res = await resolveIp(addForm.ipLink)
-                      setAddForm({
-                        ...addForm,
-                        camera_id: addForm.camera_id || slug(addForm.name),
-                        name: addForm.name || 'New Camera',
-                        location: res.location || '',
-                        lat: res.lat || '',
-                        lng: res.lng || '',
-                        rtsp_url: addForm.ipLink
-                      })
-                      if (res.error && res.error !== 'private range') {
-                        setAddError(`Location fetch note: ${res.error}`)
-                      }
-                    } catch (e) {
-                      setAddError('Failed to fetch IP details: ' + e.message)
-                    } finally {
-                      setAddLoading(false)
-                    }
-                  }}
-                >
-                  Fetch Details
-                </button>
+          <div className="form-grid">
+            {addError && <div className="login-error" role="alert">{addError}</div>}
+
+            <label className="field">
+              Name
+              <input type="text" className="input" placeholder="Front gate" value={addForm.name} autoFocus
+                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value, camera_id: f.camera_id === slug(f.name) ? slug(e.target.value) : f.camera_id }))} />
+            </label>
+
+            <label className="field">
+              Camera ID
+              <input type="text" className="input mono" placeholder="front_gate" value={addForm.camera_id} onChange={setField('camera_id')} />
+              <span className="field-hint">Filled in from the name. Lowercase letters, numbers and underscores; it cannot be changed later.</span>
+            </label>
+
+            <div className="field">
+              <label htmlFor="cam-url">Video address</label>
+              <div className="input-row">
+                <input id="cam-url" type="text" className="input" placeholder="rtsp://192.168.0.103:554/stream or http://…/video"
+                  value={addForm.rtsp_url} onChange={setField('rtsp_url')} />
+                <button type="button" className="btn" disabled={addLoading || !addForm.rtsp_url.trim()} onClick={lookUpLocation}>Look up location</button>
               </div>
-              <small className="muted" style={{ display: 'block', marginTop: '4px' }}>
-                Enter the IP link to auto-fill details and fetch geolocation.
-              </small>
+              <span className="field-hint">The RTSP or HTTP stream of the camera. "Look up location" fills the fields below for public addresses.</span>
             </div>
 
-            <div className="form-group">
-              <label>Camera ID</label>
-              <input type="text" className="input" value={addForm.camera_id} onChange={(e) => setAddForm({...addForm, camera_id: e.target.value})} />
-            </div>
-            
-            <div className="form-group">
-              <label>Name</label>
-              <input type="text" className="input" value={addForm.name} onChange={(e) => setAddForm({...addForm, name: e.target.value})} />
-            </div>
+            <label className="field">
+              Location
+              <input type="text" className="input" placeholder="Building A, main entrance" value={addForm.location} onChange={setField('location')} />
+            </label>
 
-            <div className="form-group">
-              <label>Location</label>
-              <input type="text" className="input" value={addForm.location} onChange={(e) => setAddForm({...addForm, location: e.target.value})} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>Latitude</label>
-                <input type="number" step="any" className="input" value={addForm.lat} onChange={(e) => setAddForm({...addForm, lat: e.target.value})} />
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label>Longitude</label>
-                <input type="number" step="any" className="input" value={addForm.lng} onChange={(e) => setAddForm({...addForm, lng: e.target.value})} />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>RTSP / Video URL</label>
-              <input type="text" className="input" value={addForm.rtsp_url} onChange={(e) => setAddForm({...addForm, rtsp_url: e.target.value})} />
+            <div className="two">
+              <label className="field">
+                Latitude
+                <input type="number" step="any" min="-90" max="90" className="input" placeholder="23.8103" value={addForm.lat} onChange={setField('lat')} />
+              </label>
+              <label className="field">
+                Longitude
+                <input type="number" step="any" min="-180" max="180" className="input" placeholder="90.4125" value={addForm.lng} onChange={setField('lng')} />
+              </label>
             </div>
           </div>
         </Modal>

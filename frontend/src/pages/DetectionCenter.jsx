@@ -109,7 +109,7 @@ export function DetectionCenter({ ctx }) {
                 {e.alert_id && (
                   <div className="a-actions">
                     <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPage?.('alerts')}>
-                      Open in Triage
+                      Review in Alerts
                     </button>
                   </div>
                 )}

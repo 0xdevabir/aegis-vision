@@ -34,8 +34,7 @@ docker-build:
 	docker compose build
 
 docker-up: webcam-bridge-bg
-	docker compose up -d --build
-	@echo "Dashboard: http://localhost:$${HTTP_PORT:-8080}"
+	./scripts/docker-up.sh
 
 docker-down: webcam-bridge-stop
 	docker compose down
@@ -59,3 +58,4 @@ webcam-bridge-bg:
 
 webcam-bridge-stop:
 	@lsof -tiTCP:8090 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+

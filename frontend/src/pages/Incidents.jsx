@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { can } from '../lib/permissions'
-import { Card, Icons, Tag, Empty, timeAgo, SEVERITY_TONE, Modal } from '../components/ui'
+import { Card, Icons, Tag, Empty, Stat, timeAgo, SEVERITY_TONE, Modal } from '../components/ui'
 import {
   fetchIncidents, fetchIncidentStats, updateIncident, addIncidentNote, createIncident, fetchAssignees,
 } from '../services/api'
 import { useToast } from '../components/Toast'
 const STATUSES = ['open', 'investigating', 'resolved', 'closed']
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '')
 const STATUS_TONE = { open: 'danger', investigating: 'warn', resolved: 'ok', closed: 'muted' }
 
 export function Incidents({ ctx }) {
@@ -19,8 +20,9 @@ export function Incidents({ ctx }) {
   const [stats, setStats] = useState(null)
   const [selected, setSelected] = useState(null)
   const [note, setNote] = useState('')
-  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [loadedFilter, setLoadedFilter] = useState(null)   // which filter the list on screen belongs to
+  const loading = loadedFilter !== filter
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
@@ -34,11 +36,12 @@ export function Incidents({ ctx }) {
         if (!cancelled) {
           setIncidents(list)
           setStats(st)
+          setLoadError('')
         }
       } catch (e) {
         if (!cancelled) { setIncidents([]); setLoadError(e.message || 'Could not load incidents') }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoadedFilter(filter)
       }
     })()
     return () => { cancelled = true }
@@ -69,7 +72,7 @@ export function Incidents({ ctx }) {
     try {
       await addIncidentNote(selected.id, note.trim())
       setNote('')
-      const refreshed = await fetchIncidents({})
+      const refreshed = await fetchIncidents(filter === 'all' ? {} : { status: filter })
       const found = refreshed.find((i) => i.id === selected.id)
       setIncidents(refreshed)
       if (found) setSelected(found)
@@ -101,35 +104,36 @@ export function Incidents({ ctx }) {
   return (
     <>
       {loadError && <div className="login-error" role="alert" style={{ marginBottom: 12 }}>{loadError}</div>}
-      <div className="grid grid-3" style={{ marginBottom: 14 }}>
-        <div className="stat accent-danger"><span className="label">Open</span><span className="value">{by.open || 0}</span></div>
-        <div className="stat accent-warn"><span className="label">Investigating</span><span className="value">{by.investigating || 0}</span></div>
-        <div className="stat accent-ok"><span className="label">Resolved / Closed</span><span className="value">{(by.resolved || 0) + (by.closed || 0)}</span></div>
+      <div className="grid grid-3 mb">
+        <Stat label="Open" value={by.open || 0} delta="Waiting for someone to pick up" accent={by.open ? 'danger' : 'ok'} icon={Icons.incident} />
+        <Stat label="Investigating" value={by.investigating || 0} delta="Being worked on" accent="warn" icon={Icons.search} />
+        <Stat label="Resolved or closed" value={(by.resolved || 0) + (by.closed || 0)} delta={`${stats?.total ?? 0} incidents in total`} accent="ok" icon={Icons.check} />
       </div>
 
       <Card
-        title="Incident Tickets"
-        sub="server-side · auto-created from critical alerts"
+        title="Incidents"
+        sub="Opened automatically for critical and high alerts"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <select className="input" style={{ padding: '4px 8px' }} value={filter} onChange={(e) => setFilter(e.target.value)}>
-              <option value="all">All</option>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            <select className="input" style={{ padding: '4px 8px' }} aria-label="Filter by status" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              {STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
             </select>
             {canEdit && <button className="btn btn-sm btn-primary" onClick={() => setShowNew(true)}><Icons.incident /> New</button>}
           </div>
         }
         flush
       >
-        {loading && <div style={{ padding: 16 }} className="muted">Loading…</div>}
+        {loading && <div className="skeleton-rows" aria-label="Loading incidents"><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>}
         {!loading && incidents.length === 0 && (
           <div style={{ padding: 16 }}>
             <Empty icon={Icons.incident}>
-              No tickets yet — critical alerts auto-open incidents, or click New
+              {filter === 'all' ? 'No incidents yet. One opens automatically for each critical alert.' : `No ${filter} incidents.`}
             </Empty>
           </div>
         )}
         {!loading && incidents.length > 0 && (
+          <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
@@ -164,7 +168,7 @@ export function Incidents({ ctx }) {
                       value={inc.status}
                       onChange={(e) => patch(inc.id, { status: e.target.value })}
                     >
-                      {STATUSES.map((s) => <option key={s}>{s}</option>)}
+                      {STATUSES.map((s) => <option key={s} value={s}>{cap(s)}</option>)}
                     </select>
                   </td>
                   <td className="muted">{timeAgo(inc.created_at)}</td>
@@ -173,6 +177,7 @@ export function Incidents({ ctx }) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -182,10 +187,12 @@ export function Incidents({ ctx }) {
           onClose={() => setSelected(null)}
           footer={
             <>
-              <button className="btn" onClick={() => window.print()}><Icons.download /> Export</button>
-              <button className="btn btn-primary" onClick={() => patch(selected.id, { status: 'resolved' })}>
-                <Icons.check /> Mark Resolved
-              </button>
+              <button className="btn" onClick={() => window.print()}><Icons.report /> Print</button>
+              {canEdit && !['resolved', 'closed'].includes(selected.status) && (
+                <button className="btn btn-primary" onClick={() => patch(selected.id, { status: 'resolved' })}>
+                  <Icons.check /> Mark as resolved
+                </button>
+              )}
             </>
           }
         >
@@ -222,13 +229,18 @@ export function Incidents({ ctx }) {
               <span className="muted" style={{ fontSize: '0.72rem' }}>{timeAgo(n.created_at)}</span>
             </div>
           ))}
-          <label className="field" style={{ marginTop: 12 }}>
-            Add note
-            <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Investigation notes…" />
-          </label>
-          <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }} onClick={submitNote} disabled={!note.trim()}>
-            Save note
-          </button>
+          {(selected.notes || []).length === 0 && <div className="muted">No notes yet</div>}
+          {canEdit && (
+            <>
+              <label className="field" style={{ marginTop: 12 }}>
+                Add note
+                <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What did you find?" />
+              </label>
+              <button className="btn btn-sm btn-primary" style={{ marginTop: 8 }} onClick={submitNote} disabled={!note.trim()}>
+                Save note
+              </button>
+            </>
+          )}
         </Modal>
       )}
       {showNew && (
@@ -251,7 +263,7 @@ export function Incidents({ ctx }) {
             </label>
             <label className="field">Priority
               <select className="input" value={newForm.priority} onChange={(e) => setNewForm({ ...newForm, priority: e.target.value })}>
-                {['low', 'medium', 'high', 'critical'].map((p) => <option key={p} value={p}>{p}</option>)}
+                {['low', 'medium', 'high', 'critical'].map((p) => <option key={p} value={p}>{cap(p)}</option>)}
               </select>
             </label>
           </div>

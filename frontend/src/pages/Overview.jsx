@@ -2,6 +2,7 @@ import { Card, Stat, Icons, Tag, SEVERITY_TONE, timeAgo, Empty, Pill } from '../
 import { AreaChart, BarList, Donut } from '../components/charts'
 import { MapPin } from '../components/MapPin'
 import { eventLabel } from '../lib/events'
+import { parseTs } from '../lib/time'
 
 const MODEL_LABELS = {
   weapon_detector: 'Weapon detection',
@@ -38,7 +39,12 @@ export function Overview({ ctx }) {
   const activeCameras = cameras.filter((c) => c.active).length
   const offlineCameras = cameras.length - activeCameras
   const criticalEvents = events.filter((e) => e.severity === 'critical')
+  const openCritical = criticalEvents.filter((e) => !e.acknowledged && !e.dismissed)
   const trendData = trends.map((t) => t.events)
+  const trendLabels = trends.map((t) => {
+    const d = parseTs(`${t.date}T00:00:00`)
+    return d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : t.date
+  })
   const mapAlert = criticalEvents.find((e) => e.lat != null)
 
   const attention = attentionItems(ctx, offlineCameras)
@@ -66,7 +72,7 @@ export function Overview({ ctx }) {
           accent="primary" icon={Icons.camera}
         />
         <Stat label="Detection" value={systemStatus?.online ? 'On' : 'Off'} delta={systemStatus?.online ? `${liveCams.length} camera${liveCams.length === 1 ? '' : 's'} reporting` : 'Start the pipeline to turn it on'} accent={systemStatus?.online ? 'ok' : 'warn'} icon={Icons.ai} />
-        <Stat label="Critical alerts" value={criticalEvents.length} delta={`${events.length} events since you signed in`} accent={criticalEvents.length ? 'danger' : 'ok'} icon={Icons.alert} />
+        <Stat label="Open critical alerts" value={openCritical.length} delta={`Not yet acknowledged · of the latest ${events.length} alerts`} accent={openCritical.length ? 'danger' : 'ok'} icon={Icons.alert} />
         <Stat label="Threat level" value={threatLevel[0].toUpperCase() + threatLevel.slice(1)} delta="From unreviewed alerts in the last 15 min" accent={threatAccent} icon={Icons.shield} />
       </div>
 
@@ -80,7 +86,7 @@ export function Overview({ ctx }) {
 
       <div className="grid grid-23" style={{ marginBottom: 14 }}>
         <Card title="Events per day" sub="Last 7 days">
-          <AreaChart data={trendData.length ? trendData : [0]} label="Events / day" />
+          <AreaChart data={trendData} labels={trendLabels} label="Events per day" emptyText="No events in the last 7 days" />
         </Card>
         <Card title="What was detected" sub={`Last ${summary?.period_hours ?? 24} hours`}>
           <Donut
@@ -99,7 +105,7 @@ export function Overview({ ctx }) {
         <Card title="Latest detections" actions={<Pill tone={ctx.wsConnected ? 'ok' : 'danger'}>{ctx.wsConnected ? 'Live' : 'Offline'}</Pill>}>
           {events.length === 0 && <Empty icon={Icons.eye}>Nothing detected yet. Start the pipeline with <code>./run.sh</code></Empty>}
           {events.slice(0, 8).map((evt, i) => (
-            <div key={i} className={`row ${evt.severity === 'critical' ? 'crit' : ''}`}>
+            <div key={evt.id ?? `${evt.type}-${evt.time}-${i}`} className={`row ${evt.severity === 'critical' ? 'crit' : ''}`}>
               <div>
                 <b>{eventLabel(evt.type)}</b>
                 <div className="meta">{evt.msg} · {evt.camera || '—'} · {timeAgo(evt.time)}</div>
@@ -110,7 +116,7 @@ export function Overview({ ctx }) {
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Card title="Busiest locations" sub="Last 24 hours">
-            <BarList items={locations.slice(0, 5).map((l) => ({ label: l.location || 'Unknown', value: l.events }))} />
+            <BarList items={locations.slice(0, 5).map((l) => ({ label: l.location || 'Unknown', value: l.events }))} emptyText="No detections in the last 24 hours" />
           </Card>
           <Card title="Latest critical alert">
             {mapAlert ? (

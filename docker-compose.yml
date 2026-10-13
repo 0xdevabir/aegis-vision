@@ -78,6 +78,8 @@ services:
       # Webcam index sources (source: 0) read the host webcam through
       # scripts/webcam_bridge.py (run `make webcam-bridge` on the host).
       LOCAL_CAMERA_URL: ${LOCAL_CAMERA_URL:-http://host.docker.internal:8090/video}
+      # Optional: process one file instead of cameras.yaml (e.g. a clip under data/demo).
+      PIPELINE_VIDEO: ${PIPELINE_VIDEO:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -87,6 +89,7 @@ services:
       - ./models:/app/models
       - ./config:/app/config
       - ./data/watchlist:/app/data/watchlist:ro
+      - ./data/demo:/app/data/demo:ro
 
   web:
     build: ./frontend
@@ -105,3 +108,4 @@ volumes:
 networks:
   default:
     name: aegis_network
+

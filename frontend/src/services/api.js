@@ -30,7 +30,15 @@ async function apiFetch(path, options = {}) {
     const d = err.detail;
     throw new Error((typeof d === 'object' && d ? d.message : d) || 'Request failed');
   }
-  return res.json();
+  // DELETE and some PUT routes answer with no body.
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('The server sent a response the dashboard could not read');
+  }
 }
 
 export async function login(username, password) {
@@ -347,8 +355,12 @@ export async function fetchTimeline({ cameraId, hours = 24 } = {}) {
   if (cameraId) qs.set('camera_id', cameraId);
   return apiFetch(`/recordings/timeline?${qs}`);
 }
-export function recordingFileUrl(clipId) {
-  return `${API_BASE}/recordings/${clipId}/file`;
+/** Clip download needs the Authorization header, so it is fetched and handed back as a blob URL. */
+export async function openRecordingFile(clipId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/recordings/${clipId}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new Error(res.status === 404 ? 'Clip file is missing' : 'Could not open the clip');
+  return URL.createObjectURL(await res.blob());
 }
 
 /* ---- Re-ID ---- */
@@ -417,13 +429,6 @@ export async function ptzGotoPreset(cameraId, name) {
     method: 'POST',
   });
 }
-export function vmsPlaybackUrl(cameraId, isoTime) {
-  const token = getToken();
-  const qs = new URLSearchParams({ camera_id: cameraId, t: isoTime });
-  if (token) qs.set('token', token);
-  // playback uses Authorization header via fetch; this URL is for reference
-  return `${API_BASE}/vms/playback?camera_id=${encodeURIComponent(cameraId)}&t=${encodeURIComponent(isoTime)}`;
-}
 export async function openVmsPlayback(cameraId, isoTime) {
   const token = getToken();
   const url = `${API_BASE}/vms/playback?camera_id=${encodeURIComponent(cameraId)}&t=${encodeURIComponent(isoTime)}`;
@@ -468,6 +473,6 @@ export async function fetchLiveAnalytics() {
   return apiFetch('/analytics/live');
 }
 
-export async function fetchEvidenceBundle(hours = 24) {
-  return apiFetch(`/reports/evidence-bundle?hours=${hours}`);
+export async function fetchEvidenceBundle(evidenceIds = []) {
+  return apiFetch(`/reports/evidence-bundle?ids=${encodeURIComponent(evidenceIds.join(','))}`);
 }

@@ -60,10 +60,11 @@ export function Users({ ctx }) {
   return (
     <>
       <div className="grid grid-23" style={{ marginBottom: 14 }}>
-        <Card title="System Users" sub={users ? `${users.length} accounts` : 'admin access required'} flush={!!users?.length}>
-          {!users && <Empty icon={Icons.users}>{isAdmin && loadErr ? `Could not load users: ${loadErr}` : 'User list requires an administrator session'}</Empty>}
-          {users && users.length === 0 && <Empty icon={Icons.users}>No users — run <code>python scripts/seed_demo.py</code></Empty>}
+        <Card title="Accounts" sub={users ? `${users.length} ${users.length === 1 ? 'account' : 'accounts'}` : undefined} flush={!!users?.length}>
+          {!users && <Empty icon={Icons.users}>{isAdmin ? (loadErr ? `Could not load users: ${loadErr}` : 'Loading accounts…') : 'Only administrators can see the list of accounts.'}</Empty>}
+          {users && users.length === 0 && <Empty icon={Icons.users}>No accounts yet. Create the first one with the form on this page.</Empty>}
           {users && users.length > 0 && (
+            <div className="table-wrap">
             <table className="table">
               <thead><tr><th>User</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th>{isAdmin && <th></th>}</tr></thead>
               <tbody>
@@ -72,49 +73,58 @@ export function Users({ ctx }) {
                     <td><b>{u.username}</b>{me?.id === u.id && <span className="muted"> (you)</span>}</td>
                     <td className="muted">{u.email}</td>
                     <td className="muted mono">{u.phone || '—'}</td>
-                    <td><Tag tone={ROLE_TONE[u.role] || 'muted'}>{u.role}</Tag></td>
+                    <td><Tag tone={ROLE_TONE[u.role] || 'muted'}>{ROLES.find((r) => r.role === u.role)?.label || u.role}</Tag></td>
                     <td><Tag tone={u.is_active ? 'ok' : 'muted'}>{u.is_active ? 'Active' : 'Disabled'}</Tag></td>
                     {isAdmin && <td><button className="btn btn-sm" onClick={() => openEdit(u)}>Edit</button></td>}
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
 
-        <Card title="Create User" sub={isAdmin ? 'admin only' : 'requires admin role'}>
+        {isAdmin ? (
+        <Card title="Add an account">
           {msg && (
-            <div className={msg.ok ? 'tag tag-ok' : 'login-error'} style={{ marginBottom: 10, display: 'block', padding: '8px 12px' }}>
+            <div className={msg.ok ? 'tag tag-ok' : 'login-error'} role="status" style={{ marginBottom: 10, display: 'block', padding: '8px 12px' }}>
               {msg.text}
             </div>
           )}
-          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <form onSubmit={submit} className="form-grid">
             <label className="field">Username
-              <input className="input" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <input className="input" required autoComplete="off" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </label>
             <label className="field">Email
-              <input className="input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input className="input" type="email" required autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </label>
-            <label className="field">Password (10+ characters, mix letters and digits)
-              <input className="input" type="password" required minLength={10} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <label className="field">Password
+              <input className="input" type="password" required minLength={10} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <span className="field-hint">At least 10 characters, with both letters and digits.</span>
             </label>
-            <label className="field">Phone (for police SMS alerts, e.g. +8801XXXXXXXXX)
-              <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <label className="field">Phone
+              <input className="input" type="tel" placeholder="+8801XXXXXXXXX" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <span className="field-hint">Optional. Police officers receive SMS alerts on this number.</span>
             </label>
             <label className="field">Role
               <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {ROLES.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
               </select>
             </label>
-            <button className="btn btn-primary" type="submit" disabled={busy || !isAdmin}>
-              <Icons.users /> {busy ? 'Creating…' : 'Create User'}
+            <button className="btn btn-primary" type="submit" disabled={busy}>
+              <Icons.users /> {busy ? 'Creating…' : 'Create account'}
             </button>
           </form>
         </Card>
+        ) : (
+          <Card title="Your access">
+            <p className="muted">You are signed in as <b>{me?.username}</b> ({ROLES.find((r) => r.role === me?.role)?.label || me?.role || 'unknown role'}). Ask an administrator to add or change accounts.</p>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-2">
-        <Card title="Role-Based Access Control" sub="enforced by backend JWT">
+        <Card title="What each role can do" sub="Enforced by the server on every request">
           {ROLES.map((r) => (
             <div key={r.role} className="row" style={{ alignItems: 'flex-start' }}>
               <div>
@@ -125,9 +135,9 @@ export function Users({ ctx }) {
           ))}
         </Card>
 
-        <Card title="Audit Trail" sub="admin-only · latest activity">
+        <Card title="Recent activity" sub="Latest entries in the audit log">
           {(!auditLogs || auditLogs.length === 0) && (
-            <Empty icon={Icons.shield}>No audit entries visible — requires an administrator session</Empty>
+            <Empty icon={Icons.shield}>{isAdmin ? 'Nothing has been logged yet.' : 'Only administrators can see the audit log.'}</Empty>
           )}
           {(auditLogs || []).slice(0, 15).map((log) => (
             <div key={log.id} className="row">
@@ -158,9 +168,9 @@ export function Users({ ctx }) {
               </select>
             </label>
             <label className="field">Phone (SMS alerts for police)
-              <input className="input" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="+8801XXXXXXXXX" />
+              <input className="input" type="tel" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="+8801XXXXXXXXX" />
             </label>
-            <label className="field">Reset password (leave empty to keep)
+            <label className="field">New password (leave empty to keep the current one)
               <input className="input" type="password" autoComplete="new-password" value={edit.new_password} onChange={(e) => setEdit({ ...edit, new_password: e.target.value })} />
             </label>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

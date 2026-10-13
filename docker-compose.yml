@@ -5,6 +5,7 @@ x-app: &app
   build: .
   image: aegis-app:latest
   env_file: .env
+  init: true                  # main.py has no SIGTERM handler: without an init, stop waits 10 s
   environment: &app-env
     ENVIRONMENT: production
     HEADLESS: "true"          # containers have no display; .env may say false
@@ -76,7 +77,7 @@ services:
     environment:
       <<: *app-env
       # Webcam index sources (source: 0) read the host webcam through
-      # scripts/webcam_bridge.py (run `make webcam-bridge` on the host).
+      # scripts/webcam_bridge.py on the host (started by scripts/docker-up.sh / .ps1).
       LOCAL_CAMERA_URL: ${LOCAL_CAMERA_URL:-http://host.docker.internal:8090/video}
       # Optional: process one file instead of cameras.yaml (e.g. a clip under data/demo).
       PIPELINE_VIDEO: ${PIPELINE_VIDEO:-}

@@ -33,7 +33,7 @@ ingest:
 docker-build:
 	docker compose build
 
-docker-up: webcam-bridge-bg
+docker-up:
 	./scripts/docker-up.sh
 
 docker-down: webcam-bridge-stop
@@ -44,18 +44,22 @@ docker-logs:
 
 # Lost the admin password? Reset it inside the running container:
 docker-admin:
-	docker compose exec backend python scripts/seed_demo.py --reset-password
+	docker compose exec backend docker/entrypoint.sh python scripts/seed_demo.py --reset-password
 
 # Stream the host webcam over HTTP so the Docker pipeline can read it (source: 0).
+# The bridge needs OpenCV: use the project venv when there is one.
+BRIDGE_PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+
 webcam-bridge:
-	python3 scripts/webcam_bridge.py
+	$(BRIDGE_PY) scripts/webcam_bridge.py
 
 # Background bridge for Docker: starts once, no-op if already serving on :8090.
 webcam-bridge-bg:
 	@if lsof -tiTCP:8090 -sTCP:LISTEN >/dev/null 2>&1; then echo "webcam bridge already running"; \
-	else mkdir -p logs && nohup python3 scripts/webcam_bridge.py > logs/webcam_bridge.log 2>&1 & \
+	else mkdir -p logs && nohup $(BRIDGE_PY) scripts/webcam_bridge.py > logs/webcam_bridge.log 2>&1 & \
 	echo "webcam bridge started (logs/webcam_bridge.log)"; fi
 
 webcam-bridge-stop:
 	@lsof -tiTCP:8090 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+	@[ ! -f logs/webcam_bridge.pid ] || { kill $$(cat logs/webcam_bridge.pid) 2>/dev/null; rm -f logs/webcam_bridge.pid; }
 

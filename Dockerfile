@@ -20,16 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ENV VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 ENVIRONMENT=production \
-    USE_SQLITE=false ALLOW_SQLITE_FALLBACK=false HEADLESS=true
+    USE_SQLITE=false ALLOW_SQLITE_FALLBACK=false HEADLESS=true HOME=/home/aegis
 COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY . .
-RUN chmod +x docker/entrypoint.sh \
+# sed: a Windows checkout with CRLF line endings would otherwise fail to exec the script.
+RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh \
     && useradd -m -u 1000 aegis \
-    && mkdir -p data/recordings data/watchlist evidence logs models utils/logs \
+    && mkdir -p config data/recordings data/results data/watchlist evidence logs models utils/logs \
     && chown -R aegis:aegis /app
-USER aegis
+# No USER here: the entrypoint starts as root, matches the owner of the mounted config/
+# (see docker/entrypoint.sh) and drops privileges before running anything.
 
 EXPOSE 8000
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

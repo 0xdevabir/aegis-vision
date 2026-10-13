@@ -1,0 +1,7 @@
+# Shell scripts and files copied into Linux containers must keep LF endings on Windows
+# checkouts (core.autocrlf): a CRLF entrypoint fails with "no such file or directory".
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+.env.example text eol=lf

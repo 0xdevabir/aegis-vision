@@ -1,23 +1,38 @@
 <p align="center">
-  <img src="frontend/public/logo-lockup.svg" alt="Aegis - Smart Surveillance System" width="420" />
+  <img src="frontend/public/logo.svg" alt="Aegis system logo" width="140" />
 </p>
 
-# Aegis
+<h1 align="center">Aegis</h1>
 
-### See the threat, pin the place, alert the operators — before the moment passes
+<p align="center"><strong>AI Smart Surveillance System</strong></p>
 
-![Python](https://img.shields.io/badge/Python-3.10%E2%80%933.12-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
-![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-111F68)
-![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?logo=opencv&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-184-success)
-![CI](https://img.shields.io/badge/CI-ruff%20%2B%20pytest-blue)
+<p align="center">
+  <em>See the threat, pin the place, alert the operators — before the moment passes</em>
+</p>
 
-**AI Smart Surveillance** · real-time vision pipeline · watchlist face recognition · GPS-tagged multi-channel alerts · operator command center
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%E2%80%933.12-3776AB?logo=python&logoColor=white" />
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" />
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white" />
+  <img alt="YOLOv8" src="https://img.shields.io/badge/YOLOv8-Ultralytics-111F68" />
+  <img alt="OpenCV" src="https://img.shields.io/badge/OpenCV-5C3EE8?logo=opencv&logoColor=white" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-202-success" />
+  <img alt="CI" src="https://img.shields.io/badge/CI-ruff%20%2B%20pytest-blue" />
+</p>
 
-[Quick start](#-run-it-in-one-command) · [How it works](#-how-it-works) · [Dashboard tour](#-dashboard-tour) · [Five-minute demo](#-five-minute-demo) · [Docs](#-documents)
+<p align="center">
+  Real-time vision pipeline · watchlist face recognition · GPS-tagged multi-channel alerts · capture basket · operator command center
+</p>
+
+<p align="center">
+  <a href="#-run-it-in-one-command">Quick start</a> ·
+  <a href="#-how-it-works">How it works</a> ·
+  <a href="#-dashboard-tour">Dashboard tour</a> ·
+  <a href="#-brand--identity">Brand</a> ·
+  <a href="#-five-minute-demo">Five-minute demo</a> ·
+  <a href="#-documents">Docs</a>
+</p>
 
 ---
 
@@ -25,9 +40,9 @@
 >
 > **Aegis answers one question, in real time:** *who (or what) is on this camera right now, should we care, and where exactly is it?*
 
-| 6 staged CV pipeline | Watchlist face match (DB encodings) | GPS on every critical alert | Multi-channel dispatch | 184 automated tests |
+| 6 staged CV pipeline | Watchlist face match (DB encodings) | GPS on every critical alert | Capture basket | 202 automated tests |
 | --- | --- | --- | --- | --- |
-| Detect → track → recognize → behave → analyze → output | YuNet + dlib encodings in Postgres / SQLite | Camera lat/lng + Maps link | Sound · DB · audit · WebSocket · webhooks · officers | Unit + integration, CI coverage gate |
+| Detect → track → recognize → behave → analyze → output | YuNet + dlib encodings in Postgres / SQLite | Camera lat/lng + Maps link | Zoomed stills every few seconds during a red alert | Unit + integration, CI coverage gate |
 
 ---
 
@@ -40,10 +55,11 @@
 | Alerts without location waste response time | Every critical event carries **camera GPS** and a Google Maps link | Ops map · critical banner |
 | One channel fails, the event is lost | **NotificationHub** fans out to DB, audit log, WebSocket, optional webhooks / SMS | Alert center · audit log |
 | Operators need more than a toast | Evidence snapshots, chain-of-custody, incidents, reports, DVR segments | Evidence · Incidents · Reports |
+| A red alert without a clear face is hard to act on | **Capture basket** uploads a zoomed still of the subject every few seconds while the alert is live | Capture basket · Live monitoring |
 | External freeze / notify must not be silent automation | Watchlist hits can require **operator review** before outbound webhooks | Triage · redispatch |
 | Multi-site cameras are messy | Webcam, file, RTSP, and **multi-camera** YAML with env-substituted URLs | Cameras · `config/cameras.yaml` |
 
-**Hero workflow:** a demo clip (or live camera) runs through the pipeline. A watchlisted face is matched; the HUD flashes; the hub posts to the API with GPS; the dashboard plays a sound, shows a red banner, drops a map pin, and stores evidence — while an audit row records who saw what.
+**Hero workflow:** a demo clip (or live camera) runs through the pipeline. A watchlisted face is matched; the HUD flashes; the hub posts to the API with GPS; the dashboard plays a sound, shows a red banner, drops a map pin, and stores evidence — while the capture basket fills with zoomed stills and an audit row records who saw what.
 
 ---
 
@@ -113,6 +129,7 @@ sequenceDiagram
 | **Detection / Triage** | Alert queue with severity, camera, GPS, redispatch after human review |
 | **Watchlist · Face registry** | Manage identities and encodings; ingest from `data/watchlist/` |
 | **Evidence** | Snapshots with optional AES-256-GCM encryption and custody trail |
+| **Capture basket** | Zoomed subject stills during critical alerts (`CAPTURE_INTERVAL_SECONDS`); kept only if a critical alert for that camera exists in the last 15 min |
 | **Map** | Camera pins and alert geotags (Leaflet) |
 | **Cameras · Zone editor** | Registry, GPS, zones / lines for analytics |
 | **Vehicles** | Tracks and optional plate OCR (multi-read voting) |
@@ -173,13 +190,14 @@ aegis/
 ├── core/                   # detectors, tracking, recognition, analysis, pipeline
 ├── backend/                # REST, WebSocket, alert dispatcher, auth, services
 ├── frontend/               # operator UI (pages, hooks, services)
-├── utils/alerts/           # NotificationHub + event publisher
+│   └── public/             # logo.svg · logo-seal.svg · logo-lockup.svg · favicon.svg
+├── utils/alerts/           # NotificationHub, capture basket, event publisher
 ├── config/                 # config.yaml, cameras.yaml, models.yaml
 ├── data/watchlist/         # face images → DB encodings
 ├── data/demo/clips/        # demo video (sample.mp4)
 ├── scripts/                # setup, ingest, seed, evaluate, docker-up
 ├── docs/                   # architecture, defense, development
-└── tests/                  # pytest (184 collected)
+└── tests/                  # pytest (202 collected)
 ```
 
 ---
@@ -221,6 +239,19 @@ cp .env.example .env
 docker compose up -d --build
 # Dashboard: http://localhost:8080
 ```
+
+Or one command, which also creates `.env`, the mounted folders and the host webcam bridge:
+
+| OS | Command | Needs |
+| --- | --- | --- |
+| macOS (Intel / Apple Silicon) | `./scripts/docker-up.sh` or `make docker-up` | Docker Desktop |
+| Linux (x86-64 / arm64) | `./scripts/docker-up.sh` or `make docker-up` | Docker Engine + Compose v2 plugin |
+| Windows 10/11 | `powershell -ExecutionPolicy Bypass -File scripts\docker-up.ps1` | Docker Desktop (WSL 2 backend) |
+
+- The image is CPU-only and builds natively for amd64 and arm64. Give Docker at least 4 GB of memory (the first build compiles dlib).
+- Linux: the containers run as the user who owns `./config`, so files written into the mounts stay yours. The webcam bridge listens on the Docker bridge address (`172.17.0.1:8090`); if a firewall (ufw) is active, allow it: `sudo ufw allow in on docker0 to any port 8090`.
+- Windows: clone with Git as usual (`.gitattributes` keeps the shell scripts LF). Run the script from PowerShell, not WSL, if you want the PC's webcam.
+- The bridge serves one camera, so every webcam index (`source: 0`, `1`, …) shows the same picture in Docker. Use RTSP/HTTP sources for more cameras.
 
 Host webcam into Docker: `make webcam-bridge` (HTTP bridge on `:8090`). Drop model weights into `./models/` (mounted). Lost admin password: `make docker-admin`.
 
@@ -271,9 +302,10 @@ Keep the dashboard open at http://localhost:5173 and the pipeline window visible
 | **0:30** | **Pipeline:** `./run.sh` (or demo MP4). Point at Detection → Tracking → Recognition stages; press `S` for timings. |
 | **1:30** | **Watchlist hit:** a known face matches → HUD “CRIMINAL ALERT”, sound, DB row, audit `AUTO_ALERT`. |
 | **2:15** | **Dashboard:** critical banner, browser notification, Events / Triage, map pin with Maps link. |
-| **3:00** | **Evidence:** snapshot + custody; show `/api/v1/alerts/` in Swagger if needed. |
-| **3:45** | **Trust:** JWT login, roles, review-before-webhook for watchlist hits, append-style audit. |
-| **4:30** | **Close:** modular CV + operator loop — detect, locate, alert, review — not a silent DVR. |
+| **3:00** | **Capture basket:** open the basket — zoomed stills arrive every few seconds while the subject stays in view. |
+| **3:30** | **Evidence:** snapshot + custody; show `/api/v1/alerts/` in Swagger if needed. |
+| **4:00** | **Trust:** JWT login, roles, review-before-webhook for watchlist hits, append-style audit. |
+| **4:40** | **Close:** modular CV + operator loop — detect, locate, alert, review — not a silent DVR. |
 
 Full talking points and viva backup: [`docs/DEFENSE.md`](docs/DEFENSE.md).
 
@@ -300,6 +332,7 @@ Copy `.env.example` → `.env`. Important variables:
 | `WEBHOOK_SIGNING_SECRET` | `X-Aegis-Signature: sha256=HMAC(…)` on outbound webhooks |
 | `METRICS_TOKEN` | Bearer for Prometheus `/api/v1/metrics` |
 | `STREAM_*` / `DVR_*` | Live MJPEG quality and continuous recording retention |
+| `CAPTURE_ENABLED` / `CAPTURE_INTERVAL_SECONDS` / `CAPTURE_RETENTION_DAYS` | Red-alert capture basket (zoomed stills while a critical subject is in view) |
 | Camera GPS | `config/cameras.yaml` or `config/config.yaml` → `camera_lat` / `camera_lng` |
 
 | File | Purpose |
@@ -322,6 +355,7 @@ All routes under `/api/v1/`. Interactive docs: http://localhost:8000/docs
 | Alerts | `POST /alerts/dispatch` (internal), list / redispatch / triage |
 | Cameras · Map | `GET /cameras`, `GET /map/cameras` |
 | Evidence · Custody | evidence upload/list, chain-of-custody |
+| Captures | `POST /captures/ingest` (pipeline), list / fetch basket stills |
 | Faces · Watchlist | registry CRUD, ingest-backed encodings |
 | Reports · Incidents | `GET /reports/incident`, incident workflows |
 | Stream · VMS · DVR | live MJPEG, recordings, retention |
@@ -351,6 +385,26 @@ Guardrails that matter in a surveillance system:
 
 ---
 
+
+## Brand & identity
+
+Official marks live under `frontend/public/`. Use the system logo on the command center, docs, and government briefs; keep clear space around the shield equal to the aperture diameter.
+
+| Asset | File | Use |
+| --- | --- | --- |
+| **System logo** | [`frontend/public/logo.svg`](frontend/public/logo.svg) | App chrome, login, sidebar, PWA |
+| **Favicon** | [`frontend/public/favicon.svg`](frontend/public/favicon.svg) | Browser tab |
+| **Official seal** | [`frontend/public/logo-seal.svg`](frontend/public/logo-seal.svg) | Letterhead, reports, presentations |
+| **Wordmark lockup** | [`frontend/public/logo-lockup.svg`](frontend/public/logo-lockup.svg) | README, docs headers, slide titles |
+
+**Mark language:** heraldic shield (protection) · hexagonal camera aperture (sensor) · radar arcs + reticle (coverage / precision) · diagonal lattice (structured monitoring). Palette: sage `#a8bca1` on charcoal `#1b1b1b`.
+
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="Aegis mark" width="96" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="frontend/public/logo-seal.svg" alt="Aegis seal" width="96" />
+</p>
+
 ## Documents
 
 | Document | Description |
@@ -365,7 +419,7 @@ Guardrails that matter in a surveillance system:
 
 ## Impact
 
-- **Operators:** one place for live video, ranked alerts, map context, and evidence — not three tools and a radio delay.
+- **Operators:** one place for live video, ranked alerts, map context, capture stills, and evidence — not three tools and a radio delay.
 - **Security teams:** watchlist and weapon events land with GPS and an audit trail, with human review before irreversible outbound notify.
 - **Builders / researchers:** a modular CV pipeline you can time, extend, and evaluate (`evaluate_pipeline.py`) beside a real FastAPI + React command center.
 

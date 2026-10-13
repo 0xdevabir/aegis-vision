@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   login, clearToken, getToken, fetchAlerts, fetchSystemStatus,
   fetchKnownPersons, fetchEvidence, fetchMapCameras, fetchMapEvents,
@@ -12,11 +12,13 @@ import { ProfileModal } from './components/ProfileModal'
 import { parseTs } from './lib/time'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useAutoAlerts } from './hooks/useAutoAlerts'
-import { canViewPage } from './lib/permissions'
+import { can, canViewPage } from './lib/permissions'
+import { buildCamList } from './lib/cameras'
 import { Card, Empty, Icons, Pill } from './components/ui'
 import { CommandPalette } from './components/CommandPalette'
 import { NotificationDrawer } from './components/NotificationDrawer'
 import { Copilot } from './components/Copilot'
+import { AccountMenu, AskBar, CameraPanel, Clock, ResponsePanel } from './components/Workspace'
 import { CriticalAlertBanner } from './components/CriticalAlertBanner'
 import { Overview } from './pages/Overview'
 import { LiveMonitoring } from './pages/LiveMonitoring'
@@ -75,12 +77,17 @@ const NAV = [
   },
 ]
 const ALL_PAGES = NAV.flatMap((g) => g.pages)
-// Phone tab bar: the pages used every shift. Everything else is behind "More".
+// The pages used every shift: tabs over the centre panel, and the phone tab bar.
 const TAB_PAGES = ['overview', 'live', 'alerts', 'map'].map((id) => ALL_PAGES.find((p) => p.id === id))
-
-function filterNavByRole(role) {
-  // While the profile loads (role unknown) show no navigation instead of flashing the admin menu.
-  return NAV.map((g) => ({ ...g, pages: g.pages.filter((p) => canViewPage(role, p.id)) })).filter((g) => g.pages.length)
+// Response panel tiles. The colour only tells the tiles apart; it carries no severity.
+const TOOLS = [
+  ['incidents', 'orange'], ['evidence', 'cyan'], ['faces', 'purple'], ['watchlist', 'danger'],
+  ['vehicles', 'warn'], ['detection', 'primary'], ['analytics', 'ok'], ['reports', 'text-2'],
+].map(([id, tone]) => ({ ...ALL_PAGES.find((p) => p.id === id), tone }))
+const THREAT = {
+  low: { tone: 'ok', label: 'Threat level low' },
+  high: { tone: 'warn', label: 'Threat level elevated' },
+  critical: { tone: 'danger', label: 'Threat level critical' },
 }
 
 function pageFromHash() {
@@ -189,10 +196,8 @@ function App() {
   const [authed, setAuthed] = useState(!!getToken())
   const [sessionNotice, setSessionNotice] = useState('')
   const [page, setPageState] = useState(pageFromHash())
-  const [scrolled, setScrolled] = useState(false)   // the large page title has scrolled under the top bar
   const setPage = (id) => {
     setPageState(id)
-    setScrolled(false)
     window.history.pushState(null, '', `#/${id}`)
   }
   const [theme, setThemeState] = useState(() => {
@@ -202,7 +207,6 @@ function App() {
       return applyTheme('dark')
     }
   })
-  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [events, setEvents] = useState([])
   const [systemStatus, setSystemStatus] = useState(null)
@@ -232,6 +236,19 @@ function App() {
   const [mapFocus, setMapFocus] = useState(null)      // {cameraId, lat, lng, t}: which camera the map should show
   const [showNotifs, setShowNotifs] = useState(false)
   const [showCopilot, setShowCopilot] = useState(false)
+  const [askQuery, setAskQuery] = useState('')        // question typed in the Home ask bar
+  const [showAccount, setShowAccount] = useState(false)
+  const [liveFocus, setLiveFocus] = useState(null)    // {cameraId, t}: camera picked in the cameras panel
+  // Side panels: open where there is room, then whatever the operator last chose.
+  const [panels, setPanels] = useState(() => {
+    const roomy = { left: window.innerWidth >= 1360, right: window.innerWidth >= 1100 }
+    try { return { ...roomy, ...JSON.parse(localStorage.getItem('aegis_panels') || '{}') } } catch { return roomy }
+  })
+  const togglePanel = (side) => {
+    const next = { ...panels, [side]: !panels[side] }
+    setPanels(next)
+    try { localStorage.setItem('aegis_panels', JSON.stringify(next)) } catch { /* ignore */ }
+  }
   // One card per (type, camera, person): two cameras alerting at once must both stay on screen.
   const [criticalAlerts, setCriticalAlerts] = useState([])
   const alertKey = (a) => `${a.type}|${a.cameraId ?? a.camera}|${a.personName ?? ''}`
@@ -245,7 +262,7 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    const onHash = () => { setPageState(pageFromHash()); setScrolled(false) }
+    const onHash = () => { setPageState(pageFromHash()) }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -373,7 +390,7 @@ function App() {
       } else if (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey) {
         setShowCopilot((v) => !v)
       } else if (e.key === 'Escape') {
-        setShowPalette(false); setShowNotifs(false); setShowCopilot(false); setSidebarOpen(false)
+        setShowPalette(false); setShowNotifs(false); setShowCopilot(false); setShowAccount(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -399,6 +416,21 @@ function App() {
   const reloadCameras = useCallback(() => {
     fetchCameras().then(setCameras).catch(() => {})
   }, [])
+
+  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams), [cameras, systemStatus, streamingCams])
+
+  /* Page grids follow the centre panel's width (see .center[data-w] in index.css). */
+  const centerRef = useRef(null)
+  useEffect(() => {
+    const el = centerRef.current
+    if (!el) return undefined
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      el.dataset.w = w < 700 ? 'sm' : w < 1040 ? 'md' : 'lg'
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [authed])
 
   /* Threat level is derived, so it falls back by itself once alerts are handled:
      unhandled alerts from the last 15 minutes, or a hot camera score from the pipeline. */
@@ -440,13 +472,15 @@ function App() {
   const PageComponent = PAGE_COMPONENTS[page] || Overview
   const alertCount = reviewPending || criticalEvents.length
   const allowed = !me || canViewPage(me.role, page)
+  // While the profile loads (role unknown) show no tabs instead of flashing the admin set.
+  const tabPages = TAB_PAGES.filter((p) => canViewPage(me?.role, p.id))
 
   const ctx = {
     events, setEvents, systemStatus, threatLevel, wsConnected,
     knownPersons, reloadKnownPersons, evidence, mapCameras, mapEvents, cameras,
     report, summary, trends, locations,
     plates, vehicleDetections, auditLogs, reloadVehicles,
-    me, streamingCams, reloadCameras, setPage, mapFocus,
+    me, streamingCams, reloadCameras, setPage, mapFocus, liveFocus,
     reviewPending, refreshReviewCount, captureEvent,
     theme, setTheme,
   }
@@ -465,57 +499,22 @@ function App() {
           ))}
         </div>
       )}
-      {sidebarOpen && <button type="button" className="sidebar-scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <header className="appbar">
         <div className="brand">
           <span className="brand-logo" aria-hidden="true">
             <img src="/logo.svg" alt="" width="34" height="34" />
           </span>
-          <div>Aegis<small>Smart surveillance</small></div>
+          <div>Aegis<small>Surveillance operations</small></div>
         </div>
-        <div className="nav-scroll">
-          {filterNavByRole(me?.role).map((group) => (
-            <div className="nav-group" key={group.group}>
-              <div className="nav-group-label">{group.group}</div>
-              {group.pages.map((p) => {
-                const Icon = p.icon
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`nav-item ${page === p.id ? 'active' : ''}`}
-                    aria-current={page === p.id ? 'page' : undefined}
-                    data-alert-nav={p.id === 'alerts' && criticalEvents.length > 0 ? 'true' : undefined}
-                    onClick={() => { setPage(p.id); setSidebarOpen(false) }}
-                  >
-                    <Icon />
-                    {p.label}
-                    {p.id === 'alerts' && alertCount > 0 && (
-                      <span className="nav-badge" aria-label={`${alertCount} need attention`}>{alertCount}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-        <div className="sidebar-footer">
-          <div className="session-chip">
-            <span className="avatar">{(me?.username || 'AD').slice(0, 2).toUpperCase()}</span>
-            <div className="who"><b>{me?.username || '…'}</b><span>{me?.role || ''}</span></div>
-            <button className="icon-btn" title="My account" aria-label="My account" onClick={() => setShowProfile(true)}>
-              <Icons.users />
-            </button>
-            <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={() => { clearToken(); setAuthed(false) }}>
-              <Icons.logout />
-            </button>
+        <div className="appbar-right">
+          <div className="status-rail" aria-label="System status">
+            <Pill tone={THREAT[threatLevel].tone}>{THREAT[threatLevel].label}</Pill>
+            <Pill tone={pipelineOnline ? 'ok' : 'warn'}>{pipelineOnline ? 'Detection on' : 'Detection off'}</Pill>
+            <Pill tone={wsConnected && statusWsConnected ? 'ok' : 'danger'}>
+              {wsConnected && statusWsConnected ? 'Live' : 'Reconnecting…'}
+            </Pill>
           </div>
-        </div>
-      </aside>
-
-      <main className="main">
-        <header className={`topbar ${scrolled ? 'scrolled' : ''}`}>
-          <span className="topbar-compact" aria-hidden="true">{activePage?.label}</span>
+          <Clock />
           <button
             type="button"
             className="searchbox"
@@ -526,86 +525,142 @@ function App() {
             <span>Search</span>
             <kbd>⌘K</kbd>
           </button>
-          <div className="topbar-right">
-            <div className="status-rail" aria-label="System status">
-              <Pill tone={pipelineOnline ? 'ok' : 'warn'}>{pipelineOnline ? 'Detection on' : 'Detection off'}</Pill>
-              <Pill tone={wsConnected && statusWsConnected ? 'ok' : 'danger'}>
-                {wsConnected && statusWsConnected ? 'Live' : 'Reconnecting…'}
-              </Pill>
-            </div>
-            <div className="topbar-actions">
-              <button type="button" className="icon-btn" title="Ask the assistant" aria-label="Ask the assistant" onClick={() => setShowCopilot(true)}><Icons.bot /></button>
-              <button type="button" className="icon-btn" title="Notifications" aria-label="Notifications" onClick={() => setShowNotifs(true)} style={{ position: 'relative' }}>
-                <Icons.bell />
-                {criticalEvents.length > 0 && (
-                  <span className="nav-badge" style={{ position: 'absolute', top: 0, right: 0 }}>{criticalEvents.length}</span>
-                )}
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-                aria-label="Toggle theme"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              >
-                {theme === 'dark' ? <Icons.sun /> : <Icons.moon />}
-              </button>
-            </div>
+          <div className="row" style={{ gap: 2 }}>
+            <button type="button" className="icon-btn" title="Ask the assistant" aria-label="Ask the assistant" onClick={() => setShowCopilot(true)}><Icons.bot /></button>
+            <button type="button" className="icon-btn has-badge" title="Notifications" aria-label="Notifications" onClick={() => setShowNotifs(true)}>
+              <Icons.bell />
+              {criticalEvents.length > 0 && <span className="nav-badge">{criticalEvents.length}</span>}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-label="Toggle theme"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              {theme === 'dark' ? <Icons.sun /> : <Icons.moon />}
+            </button>
           </div>
-        </header>
-
-        <div className="page" key={page} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 48)}>
-          {(apiDown || loadFailed.length > 0) && (
-            <div className="conn-banner" role="status">
-              <span>
-                {apiDown
-                  ? 'Cannot reach the server. Showing the last data received and retrying.'
-                  : `Some data could not be loaded (${loadFailed.join(', ')}).`}
-              </span>
-              <button className="btn btn-sm" onClick={() => { setLoadFailed([]); setReloadTick((t) => t + 1) }}>Retry now</button>
-            </div>
-          )}
-          <div className="page-view">
-            {allowed ? (
-              <>
-                <div className="page-title">
-                  <h1>{activePage?.label}</h1>
-                  <p>{activePage?.desc}</p>
-                </div>
-                <PageComponent ctx={ctx} />
-              </>
-            ) : (
-              <Card title="You don't have access to this page" sub={`The ${me.role} role cannot open it`}>
-                <Empty icon={Icons.shield}>Ask an administrator if you need access.</Empty>
-              </Card>
-            )}
-          </div>
+          <AccountMenu
+            me={me} open={showAccount} setOpen={setShowAccount}
+            items={[
+              { label: 'My account', icon: Icons.users, run: () => setShowProfile(true) },
+              ...['users', 'settings'].filter((id) => canViewPage(me?.role, id)).map((id) => {
+                const p = ALL_PAGES.find((x) => x.id === id)
+                return { label: p.label, icon: p.icon, run: () => setPage(id) }
+              }),
+            ]}
+            onSignOut={() => { clearToken(); setAuthed(false) }}
+          />
         </div>
+      </header>
 
-        <nav className="tabbar" aria-label="Main">
-          {TAB_PAGES.filter((p) => canViewPage(me?.role, p.id)).map((p) => {
-            const Icon = p.icon
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`tab ${page === p.id ? 'active' : ''}`}
-                aria-current={page === p.id ? 'page' : undefined}
-                data-alert-nav={p.id === 'alerts' && criticalEvents.length > 0 ? 'true' : undefined}
-                onClick={() => setPage(p.id)}
-              >
-                <Icon />
-                {p.label.split(' ')[0]}
-                {p.id === 'alerts' && alertCount > 0 && <span className="nav-badge">{alertCount}</span>}
-              </button>
-            )
-          })}
-          <button type="button" className={`tab ${sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(true)}>
-            <Icons.menu />
-            More
-          </button>
-        </nav>
-      </main>
+      <div className="workspace">
+        <CameraPanel
+          camList={camList} open={panels.left} onToggle={() => togglePanel('left')}
+          canManage={can(me?.role, 'camera.manage')} canZones={canViewPage(me?.role, 'zones')} hasMap={canViewPage(me?.role, 'map')}
+          onOpenCamera={canViewPage(me?.role, 'live') ? (c) => { setLiveFocus({ cameraId: c.camera_id, t: Date.now() }); setPage('live') } : null}
+          onLocate={(c) => {
+            const at = mapCameras.find((m) => m.camera_id === c.camera_id)
+            setMapFocus({ cameraId: c.camera_id, lat: at?.lat, lng: at?.lng, t: Date.now() })
+            setPage('map')
+          }}
+          setPage={setPage}
+        />
+
+        <main className={`panel center ${page === 'overview' ? 'has-ask' : ''}`} ref={centerRef}>
+          <nav className="center-head" aria-label="Views">
+            {tabPages.map((p) => {
+              const Icon = p.icon
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`view-tab ${page === p.id ? 'active' : ''}`}
+                  aria-current={page === p.id ? 'page' : undefined}
+                  data-alert-nav={p.id === 'alerts' && criticalEvents.length > 0 ? 'true' : undefined}
+                  onClick={() => setPage(p.id)}
+                >
+                  <Icon />
+                  {p.label}
+                  {p.id === 'alerts' && alertCount > 0 && (
+                    <span className="nav-badge" aria-label={`${alertCount} need attention`}>{alertCount}</span>
+                  )}
+                </button>
+              )
+            })}
+            {/* A page opened from a side panel shows as one more tab, so you can see where you are. */}
+            {activePage && !tabPages.includes(activePage) && (
+              <>
+                <span className="view-sep" aria-hidden="true" />
+                <span className="view-tab active" aria-current="page"><activePage.icon />{activePage.label}</span>
+              </>
+            )}
+          </nav>
+
+          <div className="page" key={page}>
+            {(apiDown || loadFailed.length > 0) && (
+              <div className="conn-banner" role="status">
+                <span>
+                  {apiDown
+                    ? 'Cannot reach the server. Showing the last data received and retrying.'
+                    : `Some data could not be loaded (${loadFailed.join(', ')}).`}
+                </span>
+                <button className="btn btn-sm" onClick={() => { setLoadFailed([]); setReloadTick((t) => t + 1) }}>Retry now</button>
+              </div>
+            )}
+            <div className="page-view">
+              {allowed ? (
+                <>
+                  <div className="page-title">
+                    <h1>{activePage?.label}</h1>
+                    <p>{activePage?.desc}</p>
+                  </div>
+                  <PageComponent ctx={ctx} />
+                </>
+              ) : (
+                <Card title="You don't have access to this page" sub={`The ${me.role} role cannot open it`}>
+                  <Empty icon={Icons.shield}>Ask an administrator if you need access.</Empty>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {page === 'overview' && (
+            <AskBar liveCount={camList.filter((c) => c.status === 'live').length} onAsk={(q) => { setAskQuery(q); setShowCopilot(true) }} />
+          )}
+
+          <nav className="tabbar" aria-label="Main">
+            {tabPages.map((p) => {
+              const Icon = p.icon
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`tab ${page === p.id ? 'active' : ''}`}
+                  aria-current={page === p.id ? 'page' : undefined}
+                  data-alert-nav={p.id === 'alerts' && criticalEvents.length > 0 ? 'true' : undefined}
+                  onClick={() => setPage(p.id)}
+                >
+                  <Icon />
+                  {p.label.split(' ')[0]}
+                  {p.id === 'alerts' && alertCount > 0 && <span className="nav-badge">{alertCount}</span>}
+                </button>
+              )
+            })}
+            <button type="button" className="tab" onClick={() => setShowPalette(true)}>
+              <Icons.menu />
+              More
+            </button>
+          </nav>
+        </main>
+
+        <ResponsePanel
+          tools={TOOLS.filter((t) => canViewPage(me?.role, t.id))} page={page} setPage={setPage}
+          feed={events.filter((e) => !e.acknowledged && !e.dismissed)} alertCount={alertCount}
+          open={panels.right} onToggle={() => togglePanel('right')}
+        />
+      </div>
 
       {showPalette && (
         <CommandPalette
@@ -626,7 +681,7 @@ function App() {
         <NotificationDrawer events={events} onClose={() => setShowNotifs(false)} onClear={() => { setEvents([]); setClearedAt(Date.now()) }} />
       )}
       {showCopilot && (
-        <Copilot ctx={{ events, summary, cameras, threatLevel, locations }} onClose={() => setShowCopilot(false)} />
+        <Copilot ctx={{ events, summary, cameras, threatLevel, locations }} initialQuery={askQuery} onClose={() => { setShowCopilot(false); setAskQuery('') }} />
       )}
     </div>
   )

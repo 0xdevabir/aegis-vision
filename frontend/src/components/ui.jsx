@@ -104,6 +104,12 @@ export const Icons = {
   zone: () => (
     <svg viewBox="0 0 24 24" {...stroke}><path d="M4 7l6-3 9 4-2 11-9 1-4-6 0-7z"/><circle cx="4" cy="7" r="1.2"/><circle cx="10" cy="4" r="1.2"/><circle cx="19" cy="8" r="1.2"/><circle cx="17" cy="19" r="1.2"/></svg>
   ),
+  plus: () => (
+    <svg viewBox="0 0 24 24" {...stroke}><path d="M12 5v14M5 12h14"/></svg>
+  ),
+  panel: () => (
+    <svg viewBox="0 0 24 24" {...stroke}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+  ),
   fire: () => (
     <svg viewBox="0 0 24 24" {...stroke}><path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7C14 6 13 4 13 2c-3 2-5 5-5 8-1-.8-1.6-2-2-3.2C4.7 8.6 5 11 5 13c0 4.7 3 9 7 9z"/></svg>
   ),

@@ -23,7 +23,7 @@ REID_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/person_reid_yo
             "person_reid_youtu_2021nov.onnx")
 
 ENABLED = os.getenv("XCAM_TRACKING_ENABLED", "true").lower() == "true"
-MATCH_THRESHOLD = float(os.getenv("XCAM_MATCH_THRESHOLD", "0.6"))   # cosine similarity, 0-1
+MATCH_THRESHOLD = float(os.getenv("XCAM_MATCH_THRESHOLD", "0.7"))   # cosine similarity, 0-1
 TTL_SECONDS = float(os.getenv("XCAM_TTL_SECONDS", "900"))           # forget a subject unseen this long
 
 _MEAN = np.array([0.485, 0.456, 0.406], np.float32).reshape(1, 3, 1, 1)

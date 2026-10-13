@@ -82,9 +82,11 @@ function answer(q, ctx) {
   return 'I can summarize incidents, explain alerts, report threat level, find hotspot cameras, and suggest response actions. Try one of the suggestion chips, or ask about “threat level”, “summary”, or “response actions”.'
 }
 
-export function Copilot({ ctx, onClose }) {
-  const [messages, setMessages] = useState([
+export function Copilot({ ctx, onClose, initialQuery = '' }) {
+  // Opened from the Home ask bar: the question is already asked, so start with its answer.
+  const [messages, setMessages] = useState(() => [
     { role: 'bot', text: 'Quick answers from the alerts, cameras and analytics loaded in this session. This is a rule-based helper, not an AI model. Try “threat level” or “latest alert”.' },
+    ...(initialQuery ? [{ role: 'user', text: initialQuery }, { role: 'bot', text: answer(initialQuery, ctx) }] : []),
   ])
   const [input, setInput] = useState('')
   const bodyRef = useRef(null)

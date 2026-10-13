@@ -1,0 +1,38 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+*.db
+*.sqlite
+*.pkl
+*.enc
+evidence/
+logs/
+models/*.pt
+models/*.onnx
+!.env.example
+archive/
+
+
+.coverage
+*.db
+.venv/
+frontend/node_modules/
+data/recordings/
+*.DS_Store
+.DS_Store
+frontend/dist/
+*.out
+
+# Local credentials (never commit)
+docs/CREDENTIALS.local.md
+
+# Watchlist face photos are personal data — keep local, never commit
+data/watchlist/*/
+
+# Local agent/editor settings
+.claude/settings.local.json
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

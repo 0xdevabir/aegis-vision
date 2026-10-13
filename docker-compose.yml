@@ -1,0 +1,107 @@
+# Aegis — full stack:   cp .env.example .env  (set secrets)  →  docker compose up -d --build
+# Dashboard: http://localhost:${HTTP_PORT:-8080}
+
+x-app: &app
+  build: .
+  image: aegis-app:latest
+  env_file: .env
+  environment: &app-env
+    ENVIRONMENT: production
+    HEADLESS: "true"          # containers have no display; .env may say false
+    USE_SQLITE: "false"
+    ALLOW_SQLITE_FALLBACK: "false"
+    DATABASE_URL: postgresql://${POSTGRES_USER:-aegis}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-aegis}
+    REDIS_URL: redis://redis:6379/0
+    BACKEND_URL: http://backend:8000
+    SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+    ENCRYPTION_SALT: ${ENCRYPTION_SALT:?set ENCRYPTION_SALT in .env}
+    INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aegis}
+      POSTGRES_USER: ${POSTGRES_USER:-aegis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    <<: *app
+    command: ["api"]
+    environment:
+      <<: *app-env
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - recordings:/app/data/recordings
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./data/watchlist:/app/data/watchlist:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  # AI workers. Containers cannot reach a laptop webcam: point cameras at RTSP/HTTP
+  # sources in config/cameras.yaml (it is mounted, and re-read every few seconds).
+  pipeline:
+    <<: *app
+    command: ["pipeline"]
+    environment:
+      <<: *app-env
+      # Webcam index sources (source: 0) read the host webcam through
+      # scripts/webcam_bridge.py (run `make webcam-bridge` on the host).
+      LOCAL_CAMERA_URL: ${LOCAL_CAMERA_URL:-http://host.docker.internal:8090/video}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend: { condition: service_healthy }
+    volumes:
+      - recordings:/app/data/recordings
+      - ./models:/app/models
+      - ./config:/app/config
+      - ./data/watchlist:/app/data/watchlist:ro
+
+  web:
+    build: ./frontend
+    image: aegis-web:latest
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  recordings:
+
+networks:
+  default:
+    name: aegis_network

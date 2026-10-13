@@ -1,0 +1,10 @@
+{
+  "name": "Aegis Command Center",
+  "short_name": "Aegis",
+  "description": "AI Smart Surveillance operator dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f14",
+  "theme_color": "#1a6fff",
+  "icons": []
+}

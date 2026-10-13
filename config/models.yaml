@@ -1,0 +1,83 @@
+# ============================================================
+# Model Registry Configuration
+# ============================================================
+# Defines all ML models used by the system.
+# Supports versioning and device selection.
+
+models:
+  human_detector:
+    name: "YOLOv8s"
+    path: "models/yolov8s.pt"
+    type: yolo
+    version: "8.3"
+    device: "auto"                     # auto | cpu | cuda:0
+    description: "Human detection (COCO person class)"
+    # Upgrade path: yolov11x.pt (better accuracy, same speed)
+
+  weapon_detector:
+    name: "Weapon YOLO"
+    path: "models/weapon_yolo.pt"
+    type: yolo
+    version: "custom"
+    device: "auto"
+    description: "Weapon detection (handgun, rifle, knife)"
+    # Upgrade path: Fine-tune YOLOv11 on weapon datasets
+
+  vehicle_detector:
+    name: "YOLOv8l"
+    path: "models/yolov8l.pt"
+    type: yolo
+    version: "8.3"
+    device: "auto"
+    description: "Vehicle detection (car, motorcycle, bus, truck)"
+
+  face_recognizer:
+    name: "dlib Face Recognition"
+    type: face_recognition
+    version: "1.3.0"
+    tolerance: 0.45
+    detection_model: "hog"             # hog (CPU) | cnn (GPU)
+    description: "Face recognition using dlib embeddings"
+    # Upgrade path: InsightFace ArcFace-R100 (99.8% LFW)
+
+  pose_analyzer:
+    name: "YOLOv8n-pose"
+    path: "models/yolov8n-pose.pt"
+    type: yolo
+    version: "8.3"
+    device: "auto"
+    description: "Multi-person pose (17 COCO keypoints): raised arms, fall suspicion"
+    optional: true
+
+  fire_detector:
+    name: "Fire/Smoke YOLO"
+    path: "models/fire_smoke_yolo.pt"
+    type: yolo
+    version: "custom"
+    device: "auto"
+    description: "Fire and smoke detection (needs a trained model; feature is OFF without it)"
+    optional: true
+
+  anpr_ocr:
+    name: "EasyOCR"
+    type: easyocr
+    version: "1.7.2"
+    languages: ["en"]
+    gpu: false
+    description: "License plate text recognition"
+    # Upgrade path: PaddleOCR (faster, better Bangla support)
+
+# --- Future Models (not yet integrated) ---
+# person_reid:
+#   name: "OSNet"
+#   path: "models/osnet_x1_0.pth"
+#   type: torchreid
+#   description: "Person re-identification for cross-camera tracking"
+#
+# action_recognition:
+#   name: "SlowFast R50"
+#   path: "models/slowfast_r50.pth"
+#   type: pytorchvideo
+#   description: "Action recognition (fighting, falling, running, etc.)"
+#
+

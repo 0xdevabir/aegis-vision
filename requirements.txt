@@ -1,0 +1,39 @@
+# Core CV libraries
+opencv-python==4.12.0.88
+ultralytics==8.3.243
+face-recognition==1.3.0
+# face_recognition_models imports pkg_resources, removed in setuptools 81; without it
+# face_recognition calls quit() at import and takes the whole process down.
+setuptools<81
+deep-sort-realtime==1.3.2
+numpy==2.0.2
+
+# Backend / security
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+pgvector==0.3.2
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.12
+cryptography==43.0.3
+pydantic==2.9.2
+
+# Detection extras
+easyocr==1.7.2
+httpx==0.27.2
+
+# Utilities
+python-dotenv==1.0.0
+alembic>=1.13.0
+
+# Previously imported but undeclared
+bcrypt>=4.0.1
+redis>=5.0.0
+requests>=2.31.0
+psutil>=5.9.0
+PyYAML>=6.0
+
+# Optional: scripts/convert_heic.py
+# Pillow>=10.0.0
+# pillow-heif>=0.16.0

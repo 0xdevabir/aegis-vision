@@ -1,0 +1,83 @@
+# ============================================================
+# AI Smart Surveillance System (Aegis) v5.0 — Configuration
+# ============================================================
+
+# --- Camera Source ---
+camera_index: 0
+# RTSP example (or set CAMERA_INDEX / RTSP_* in .env):
+# camera_index: "rtsp://user:password@192.168.0.100:554/h264Preview_01_main"
+
+camera_location: "Gate_1"
+camera_name: "Main Gate Camera 1"
+camera_lat: 23.8103
+camera_lng: 90.4125
+target_fps: 8
+device: auto                       # auto | cpu | cuda:0 | mps
+
+# --- Backend integration (pipeline → dashboard) ---
+# Set BACKEND_URL and INTERNAL_API_KEY in .env
+
+# --- Model Paths ---
+model_dir: "models"
+human_model: "yolov8n.pt"         # Nano model for speed
+weapon_model: "weapon_yolo.pt"
+# vehicle_model uses yolov8l.pt by default (hardcoded in pipeline)
+
+# --- Tracking ---
+tracking:
+  appearance: histogram            # histogram (fast) | cnn (more robust to occlusion, ~100 ms/person on CPU)
+
+# --- Pose (raised arms, fall suspicion) ---
+pose:
+  enabled: true
+  every_n_frames: 2                # pose is the costliest per-frame step
+
+# --- Detection Thresholds ---
+confidence_threshold: 0.5
+weapon_conf_threshold: 0.4
+face_tolerance: 0.45
+
+# --- Recognition ---
+rerecognize_every: 30              # Re-run face recognition every N frames per track
+
+# --- Evidence & Alerts ---
+evidence_throttle_seconds: 10.0
+alarm_interval_seconds: 5.0
+auto_alerts_enabled: true          # Auto-dispatch on criminal (all cameras → all channels)
+
+# --- Criminal Watchlist ---
+# Identities come only from the Face Registry (category=criminal, status wanted/convicted/suspect).
+
+# --- Behavior Analysis ---
+behavior:
+  speed_threshold: 150             # Pixels/sec to flag as rapid movement
+  loiter_seconds: 15               # Seconds before flagging as loitering
+  erratic_angle: 60                # Degrees of direction change to count
+
+# --- Anomaly Detection ---
+anomaly:
+  crowd_threshold: 5               # People in zone to trigger crowd anomaly
+  dwell_seconds: 300               # Seconds in zone to trigger dwell anomaly
+
+# --- Data Retention ---
+retention:
+  enabled: false                   # Enable automatic evidence cleanup
+  evidence_days: 90                # Keep evidence for N days
+  archive_path: "evidence/archive" # Archive before deletion
+
+# --- ANPR (opt-in; needs a plate detector for reliable results) ---
+anpr:
+  enabled: false
+  languages:
+    - "en"
+  gpu: false
+
+# --- Logging ---
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/surveillance.log"
+  max_bytes: 10485760              # 10 MB
+  backup_count: 5
+
+

@@ -1,0 +1,20 @@
+{
+  "persons": [
+    {
+      "person_id": "CRIMINAL_001_Sadik",
+      "name": "Sadik",
+      "category": "criminal",
+      "criminal_status": "wanted",
+      "threat_level": 8,
+      "notes": "Armed robbery suspect. Last seen in Dhaka."
+    },
+    {
+      "person_id": "CRIMINAL_002_Tarik",
+      "name": "Tarik",
+      "category": "criminal",
+      "criminal_status": "convicted",
+      "threat_level": 6,
+      "notes": "Vehicle theft ring member."
+    }
+  ]
+}

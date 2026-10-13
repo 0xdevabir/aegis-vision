@@ -28,15 +28,18 @@ def _jpeg():
 
 
 def _token():
-    from backend.auth.auth import hash_password
+    from backend.auth.auth import hash_password, issue_token
 
     db = SessionLocal()
-    if not db.query(User).filter(User.username == "capop").first():
-        db.add(User(username="capop", email="cap@t.local", hashed_password=hash_password("pass1234"),
-                    role="operator", is_active=True))
+    user = db.query(User).filter(User.username == "capop").first()
+    if not user:
+        user = User(username="capop", email="cap@t.local", hashed_password=hash_password("pass1234"),
+                    role="operator", is_active=True)
+        db.add(user)
         db.commit()
+    token = issue_token(user)       # logins are rate limited across the test run
     db.close()
-    return client.post("/api/v1/auth/login", json={"username": "capop", "password": "pass1234"}).json()["access_token"]
+    return token
 
 
 def _ingest(camera_id, **extra):

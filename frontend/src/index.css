@@ -1650,3 +1650,10 @@ kbd {
   .cap-modal { grid-template-columns: 1fr; }
   .cap-list { max-height: none; order: 2; }
 }
+
+/* Live page: start / stop a camera */
+.cam-expand.cam-power { right: 46px; }
+.cam-expand.cam-power:hover { background: var(--danger); color: #fff; }
+.cam-fullscreen-tile .cam-power { display: none; }
+.cam-start { margin-top: 10px; display: inline-flex; align-items: center; gap: 6px; }
+.cam-start svg { width: 14px; height: 14px; opacity: 1; margin: 0; }

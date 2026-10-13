@@ -69,6 +69,12 @@ def _resolve_camera_index(cfg):
     return expand_env(cfg.get("camera_index", 0))
 
 
+def _cameras_to_run(base_dir):
+    """Enabled cameras that are switched on. `started: false` is standby: the camera stays
+    closed until someone starts it from the dashboard's Live page."""
+    return [c for c in load_cameras_config(base_dir) if c.get("started", True)]
+
+
 def _start_camera_thread(cam_cfg, cfg, base_dir, show_window):
     cam_id = cam_cfg["id"]
     cam_loc = cam_cfg.get("location", cam_id)
@@ -162,11 +168,11 @@ def main():
 
     if args.multi:
         snapshot_local_cameras()
-        cameras = load_cameras_config(base_dir)
+        cameras = _cameras_to_run(base_dir)
         if not cameras:
             # Keep running: the hot-reload loop below starts cameras as soon as one is enabled
             # (e.g. from the dashboard). Exiting here left nothing running to pick that up.
-            logger.warning("No enabled cameras in config/cameras.yaml — waiting for one to be enabled")
+            logger.warning("No camera is switched on — waiting for one to be started from the dashboard")
         local = {}
         for c in cameras:
             if isinstance(c.get("source", 0), int):
@@ -185,7 +191,7 @@ def main():
                 if _restart_requested.is_set():
                     logging.shutdown()
                     os._exit(RESTART_EXIT_CODE)     # skip joining camera threads stuck in OpenCV
-                current_cameras = load_cameras_config(base_dir)
+                current_cameras = _cameras_to_run(base_dir)
                 active_cids = {c.get("id") for c in current_cameras if c.get("id")}
                 
                 # 1. Stop cameras that are no longer enabled

@@ -172,7 +172,13 @@ if [ "$NO_PIPELINE" -eq 0 ]; then
     echo "[2/3] Pipeline → $VIDEO"
     supervise_pipeline --video "$VIDEO" &
   else
-    echo "[2/3] Pipeline → webcam / config (no file at $VIDEO)"
+    if [ "${CAMERA_AUTOSTART:-false}" != "true" ]; then
+      # Cameras stay closed until they are started from the dashboard's Live page.
+      $PYTHON scripts/cameras_standby.py || true
+      echo "[2/3] Pipeline → cameras on standby (start them on the Live page)"
+    else
+      echo "[2/3] Pipeline → webcam / config (no file at $VIDEO)"
+    fi
     supervise_pipeline --multi --no-display &
   fi
   PIPELINE_PID=$!

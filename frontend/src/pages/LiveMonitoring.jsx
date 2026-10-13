@@ -2,9 +2,9 @@ import { can } from '../lib/permissions'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../components/Toast'
 import { CaptureBasket } from '../components/CaptureBasket'
-import { Card, Icons, Seg, Pill, Stat, Tag, Empty, timeAgo } from '../components/ui'
+import { Card, Icons, Seg, Pill, Stat, Tag, Empty, timeAgo, useConfirm } from '../components/ui'
 import {
-  liveStreamUrl,
+  liveStreamUrl, fetchCameraPower, setCameraPower,
   fetchVmsTimeline, fetchPtz, ptzMove, ptzStop, ptzHome, ptzSetMode,
   ptzSavePreset, ptzGotoPreset, openVmsPlayback,
 } from '../services/api'
@@ -13,6 +13,7 @@ const STATUS = {
   live: { label: 'LIVE', tone: 'ok' },
   online: { label: 'NO VIDEO', tone: 'warn' },
   offline: { label: 'OFFLINE', tone: 'muted' },
+  off: { label: 'OFF', tone: 'muted' },
 }
 
 const ExpandIcon = () => (
@@ -27,13 +28,19 @@ const Chevron = ({ dir }) => (
   </svg>
 )
 
+const PowerIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v9M6.3 7.2a8 8 0 1 0 11.4 0" />
+  </svg>
+)
+
 const HomeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 11l9-8 9 8M5 10v10h14V10" />
   </svg>
 )
 
-function CamFeed({ cam, objectFit = 'cover' }) {
+function CamFeed({ cam, objectFit = 'cover', starting = false, onPower }) {
   const [failed, setFailed] = useState(false)
   const showVideo = cam.status === 'live' && !failed
   const st = STATUS[showVideo ? 'live' : (cam.status === 'live' ? 'online' : cam.status)]
@@ -47,7 +54,18 @@ function CamFeed({ cam, objectFit = 'cover' }) {
       {!showVideo && (
         <div className="cam-offline">
           <Icons.camera />
-          <b>{st.label === 'NO VIDEO' ? 'Connected, waiting for video' : 'No signal'}</b>
+          <b>
+            {cam.status === 'off' ? 'Camera is off'
+              : starting ? 'Starting camera…'
+                : st.label === 'NO VIDEO' ? 'Connected, waiting for video' : 'No signal'}
+          </b>
+          {starting && cam.status !== 'off' && <span>This can take up to half a minute</span>}
+          {cam.status === 'off' && onPower && (
+            <button type="button" className="btn btn-sm btn-primary cam-start"
+              onClick={(e) => { e.stopPropagation(); onPower(true) }}>
+              <PowerIcon /> Start camera
+            </button>
+          )}
         </div>
       )}
       <div className="cam-top">
@@ -67,7 +85,7 @@ function CamFeed({ cam, objectFit = 'cover' }) {
   )
 }
 
-function CamTile({ cam, selected, alerting, onSelect, onExpand }) {
+function CamTile({ cam, selected, alerting, starting, onSelect, onExpand, onPower }) {
   if (!cam) {
     return <div className="cam-tile empty"><span>Empty slot</span></div>
   }
@@ -82,11 +100,17 @@ function CamTile({ cam, selected, alerting, onSelect, onExpand }) {
       aria-label={`${cam.name}, ${STATUS[cam.status].label}`}
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect(); if (e.key === 'f') onExpand() }}
     >
-      <CamFeed cam={cam} />
+      <CamFeed cam={cam} starting={starting} onPower={onPower} />
       <button type="button" className="cam-expand" title="Full screen (double-click)" aria-label="Full screen"
         onClick={(e) => { e.stopPropagation(); onExpand() }}>
         <ExpandIcon />
       </button>
+      {onPower && cam.status !== 'off' && (
+        <button type="button" className="cam-expand cam-power" title="Stop camera" aria-label={`Stop ${cam.name}`}
+          onClick={(e) => { e.stopPropagation(); onPower(false) }}>
+          <PowerIcon />
+        </button>
+      )}
     </div>
   )
 }
@@ -217,6 +241,25 @@ export function LiveMonitoring({ ctx }) {
   const replayRef = useRef(null)
   useEffect(() => () => { if (replayRef.current) URL.revokeObjectURL(replayRef.current) }, [])
 
+  // Cameras stay off until someone starts them here; `power` says which ones are switched on.
+  const { push: toast } = useToast()
+  const [ask, confirmDialog] = useConfirm()
+  const [power, setPower] = useState({})
+  const [starting, setStarting] = useState(() => new Set())
+  useEffect(() => { fetchCameraPower().then(setPower).catch(() => {}) }, [])
+  const canPower = can(me?.role, 'camera.power')
+
+  const switchCamera = async (cam, on) => {
+    if (!on && !(await ask({ title: 'Stop camera', message: `Stop "${cam.name}"? Detection and recording on it stop until it is started again.`, confirmLabel: 'Stop', danger: true }))) return
+    try {
+      setPower(await setCameraPower(cam.camera_id, on))
+      setStarting((prev) => { const next = new Set(prev); if (on) next.add(cam.camera_id); else next.delete(cam.camera_id); return next })
+      if (on) setTimeout(() => setStarting((prev) => { const next = new Set(prev); next.delete(cam.camera_id); return next }), 45000)
+    } catch (e) {
+      toast(`Could not ${on ? 'start' : 'stop'} the camera: ${e.message || 'request failed'}`, 'danger')
+    }
+  }
+
   // One list: registered cameras, overlaid with live heartbeat + stream state.
   const camList = useMemo(() => {
     const streaming = new Set(streamingCams)
@@ -237,17 +280,17 @@ export function LiveMonitoring({ ctx }) {
       const beat = beats[c.camera_id]
       return {
         ...c,
-        status: streaming.has(c.camera_id) ? 'live' : beat ? 'online' : 'offline',
+        status: power[c.camera_id] === false ? 'off' : streaming.has(c.camera_id) ? 'live' : beat ? 'online' : 'offline',
         fps: beat?.fps ?? null,
         threat_score: beat?.threat_score ?? 0,
         dvr: Boolean(beat?.recording),   // only claim REC when the pipeline reports it
       }
     }).sort((x, y) => (y.status === 'live') - (x.status === 'live') || x.name.localeCompare(y.name))
-  }, [cameras, systemStatus, streamingCams])
+  }, [cameras, systemStatus, streamingCams, power])
 
   const counts = {
     live: camList.filter((c) => c.status === 'live').length,
-    online: camList.filter((c) => c.status !== 'offline').length,
+    online: camList.filter((c) => c.status === 'live' || c.status === 'online').length,
   }
 
   const slots = layout === 'auto' ? camList.length : Number(layout)
@@ -326,6 +369,8 @@ export function LiveMonitoring({ ctx }) {
                   alerting={cam && cam.camera_id === alertingId}
                   onSelect={() => cam && setSelectedId(cam.camera_id)}
                   onExpand={() => cam && setFullscreenId(cam.camera_id)}
+                  starting={cam && starting.has(cam.camera_id)}
+                  onPower={cam && canPower && cam.camera_id in power ? (on) => switchCamera(cam, on) : undefined}
                 />
               ))}
             </div>
@@ -402,6 +447,7 @@ export function LiveMonitoring({ ctx }) {
         </div>
       </div>
 
+      {confirmDialog}
       {fullscreenCam && (
         <CamFullscreen cam={fullscreenCam} alerting={fullscreenCam.camera_id === alertingId}
           onClose={() => setFullscreenId(null)} />

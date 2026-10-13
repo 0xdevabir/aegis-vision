@@ -204,6 +204,47 @@ def sync_camera_to_yaml(cam: Camera):
     except Exception as e:
         logger.error(f"Failed to sync camera to yaml: {e}")
 
+CAMERAS_YAML = Path(__file__).resolve().parents[2] / "config" / "cameras.yaml"
+POWER_ROLES = {"admin", "supervisor", "operator"}
+
+
+class PowerBody(BaseModel):
+    on: bool
+
+
+def _power_map(data: dict) -> dict:
+    return {c["id"]: bool(c.get("started", True)) for c in data.get("cameras") or [] if c.get("id")}
+
+
+@router.get("/power")
+def camera_power(user: User = Depends(operator_or_admin)):
+    """Which cameras are switched on. A camera that is off stays closed in the pipeline."""
+    if not CAMERAS_YAML.exists():
+        return {}
+    return _power_map(yaml.safe_load(CAMERAS_YAML.read_text()) or {})
+
+
+@router.post("/{camera_id}/power")
+def set_camera_power(camera_id: str, body: PowerBody, request: Request, db: Session = Depends(get_db),
+                     user: User = Depends(operator_or_admin)):
+    """Start or stop one camera. The pipeline re-reads cameras.yaml every 2 s and follows it."""
+    if user.role not in POWER_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed to start or stop cameras")
+    data = (yaml.safe_load(CAMERAS_YAML.read_text()) or {}) if CAMERAS_YAML.exists() else {}
+    cam = next((c for c in data.get("cameras") or [] if c.get("id") == camera_id), None)
+    if cam is None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if body.on and not cam.get("enabled", True):
+        raise HTTPException(status_code=409, detail="This camera is paused. Resume it on the Cameras page first.")
+    cam["started"] = body.on
+    CAMERAS_YAML.write_text(yaml.safe_dump(data, sort_keys=False))
+    if not body.on:
+        _forget_heartbeat(camera_id)
+    log_audit(db, user, "CAMERA_START" if body.on else "CAMERA_STOP", "camera", camera_id, "", request)
+    db.commit()
+    return _power_map(data)
+
+
 @router.post("/", response_model=CameraResponse)
 def create_camera(cam: CameraCreate, request: Request, db: Session = Depends(get_db), admin: User = Depends(admin_only)):
     existing = db.query(Camera).filter(Camera.camera_id == cam.camera_id).first()

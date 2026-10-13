@@ -12,6 +12,7 @@ export const ROLE_PAGES = {
 
 const ACTIONS = {
   'camera.manage': ['admin'],
+  'camera.power': ['operator', 'supervisor', 'admin'],
   'ptz': ['operator', 'supervisor', 'admin', 'police'],
   'triage.act': ['operator', 'supervisor', 'admin', 'police', 'investigator'],
   'incident.edit': ['operator', 'supervisor', 'admin', 'police', 'investigator'],

@@ -99,6 +99,17 @@ export async function fetchCameras() {
   return apiFetch('/cameras/');
 }
 
+export async function fetchCameraPower() {
+  return apiFetch('/cameras/power');
+}
+
+export async function setCameraPower(cameraId, on) {
+  return apiFetch(`/cameras/${encodeURIComponent(cameraId)}/power`, {
+    method: 'POST',
+    body: JSON.stringify({ on }),
+  });
+}
+
 export async function fetchCameraDevices() {
   return apiFetch('/cameras/devices');
 }

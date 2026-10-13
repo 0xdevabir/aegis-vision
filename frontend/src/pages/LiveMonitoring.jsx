@@ -1,6 +1,7 @@
 import { can } from '../lib/permissions'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '../components/Toast'
+import { CaptureBasket } from '../components/CaptureBasket'
 import { Card, Icons, Seg, Pill, Stat, Tag, Empty, timeAgo } from '../components/ui'
 import {
   liveStreamUrl,
@@ -73,6 +74,7 @@ function CamTile({ cam, selected, alerting, onSelect, onExpand }) {
   return (
     <div
       className={`cam-tile ${cam.status} ${alerting ? 'alerting' : ''} ${selected ? 'selected' : ''}`}
+      data-cam-id={cam.camera_id}
       onClick={onSelect}
       onDoubleClick={onExpand}
       role="button"
@@ -202,7 +204,7 @@ function PtzPad({ cameraId }) {
 }
 
 export function LiveMonitoring({ ctx }) {
-  const { systemStatus, cameras, threatLevel, streamingCams = [], me } = ctx
+  const { systemStatus, cameras, threatLevel, streamingCams = [], me, captureEvent } = ctx
   const [layout, setLayout] = useState('auto')
   const [selectedId, setSelectedId] = useState(null)
   const [fullscreenId, setFullscreenId] = useState(null)
@@ -374,6 +376,7 @@ export function LiveMonitoring({ ctx }) {
         </div>
 
         <div className="live-rail">
+          {me?.role && me.role !== 'viewer' && <CaptureBasket captureEvent={captureEvent} />}
           <Card title="Cameras" sub={`${camList.length}`} flush>
             <div className="cam-list">
               {camList.map((c) => (

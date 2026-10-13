@@ -42,9 +42,11 @@ def get_system_status(user: User = Depends(operator_or_admin)):
     offline = 0
     for cam_id, meta in _pipeline_status.get("cameras", {}).items():
         sla = camera_offline_sla(meta.get("last_seen"))
-        cameras[cam_id] = {**meta, "sla": sla}
         if sla == "offline":
+            # Paused, unplugged or crashed: counted, but no longer listed as a reporting camera.
             offline += 1
+            continue
+        cameras[cam_id] = {**meta, "sla": sla}
 
     from backend.services.model_health import model_status
 

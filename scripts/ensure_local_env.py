@@ -39,8 +39,31 @@ def ensure_face_model() -> None:
         print(f"  face detector not downloaded ({e}); using slower dlib detection")
 
 
+def ensure_attribute_model() -> None:
+    """Fetch the gender/age estimator (1.3 MB) used to describe red-alert captures. Best effort:
+    without it captures simply carry no gender/age estimate."""
+    sys.path.insert(0, str(ROOT))
+    from utils.face_attributes import GENDERAGE_MODEL, GENDERAGE_URL
+
+    if GENDERAGE_MODEL.is_file():
+        return
+    try:
+        import urllib.request
+
+        GENDERAGE_MODEL.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(GENDERAGE_URL, timeout=30) as r:
+            data = r.read()
+        if len(data) < 500_000:                      # an error page, not the model
+            raise ValueError(f"unexpected download size {len(data)}")
+        GENDERAGE_MODEL.write_bytes(data)
+        print(f"Downloaded attribute model → {GENDERAGE_MODEL.relative_to(ROOT)}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  attribute model not downloaded ({e}); captures will have no gender/age estimate")
+
+
 def main() -> int:
     ensure_face_model()
+    ensure_attribute_model()
     if not ENV_PATH.exists():
         if EXAMPLE.exists():
             ENV_PATH.write_text(EXAMPLE.read_text())

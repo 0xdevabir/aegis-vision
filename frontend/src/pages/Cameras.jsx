@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Card, Icons, Tag, Empty, Seg, Modal, Stat, useConfirm } from '../components/ui'
-import { resolveIp, addCamera, updateCamera, liveStreamUrl, deleteCamera, fetchUsers, fetchCameraOfficerMap, setCameraOfficers } from '../services/api'
+import { resolveIp, addCamera, fetchCameraDevices, updateCamera, liveStreamUrl, deleteCamera, fetchUsers, fetchCameraOfficerMap, setCameraOfficers } from '../services/api'
 import { useToast } from '../components/Toast'
 import { can } from '../lib/permissions'
 
 // Status comes only from what the system really knows: the pipeline heartbeat and the enabled flag.
-function healthOf(cam, live) {
+function healthOf(cam, live, unplugged) {
+  if (!cam.active) return { label: 'Paused', tone: 'danger' }
   if (live) return { label: 'Streaming', tone: 'ok' }
-  if (cam.active) return { label: 'No signal', tone: 'warn' }
-  return { label: 'Turned off', tone: 'danger' }
+  if (unplugged) return { label: 'Not connected', tone: 'warn' }
+  return { label: 'No signal', tone: 'warn' }
 }
 
 const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
@@ -119,14 +120,47 @@ export function Cameras({ ctx }) {
   const officerNames = (cam) => (officerMap[cam.camera_id] || []).map((o) => o.name).join(', ') || 'None assigned'
 
   const handleToggle = async (cam) => {
-    if (cam.active && !(await ask({ title: 'Turn off camera', message: `Turn off "${cam.name || cam.camera_id}"? Detection and recording stop until it is turned back on.`, confirmLabel: 'Turn off', danger: true }))) return
+    if (cam.active && !(await ask({ title: 'Pause camera', message: `Pause "${cam.name || cam.camera_id}"? Detection and recording stop until it is resumed.`, confirmLabel: 'Pause', danger: true }))) return
     try {
       await updateCamera(cam.camera_id, {
         camera_id: cam.camera_id,
         name: cam.name,
         active: !cam.active,
       })
-      toast(cam.active ? 'Camera turned off' : 'Camera turned on', 'ok')
+      toast(cam.active ? 'Camera paused' : 'Camera resumed', 'ok')
+      reloadCameras?.()
+    } catch (e) {
+      toast(`Could not change the camera: ${e.message}`, 'danger')
+    }
+  }
+
+  // Cameras plugged into this computer. Polled, so a camera connected later shows up by itself.
+  const [local, setLocal] = useState({ devices: [], unplugged: [] })
+  useEffect(() => {
+    const load = () => fetchCameraDevices().then(setLocal).catch(() => {})
+    load()
+    const timer = setInterval(load, 10000)
+    return () => clearInterval(timer)
+  }, [cameras])
+
+  const startDevice = async (d) => {
+    const taken = new Set(cameras.map((c) => c.camera_id))
+    const base = slug(d.name) || 'camera'
+    let cameraId = base
+    for (let n = 2; taken.has(cameraId); n += 1) cameraId = `${base}_${n}`
+    try {
+      await addCamera({ camera_id: cameraId, name: d.name, location: 'Local', rtsp_url: d.source })
+      toast(`"${d.name}" is now in use`, 'ok')
+      reloadCameras?.()
+    } catch (e) {
+      toast(`Could not start the camera: ${e.message}`, 'danger')
+    }
+  }
+
+  const lockDevice = async (d) => {
+    try {
+      await updateCamera(d.camera_id, { camera_id: d.camera_id, name: d.camera_name, rtsp_url: d.source })
+      toast(`"${d.camera_name}" now stays on ${d.name}`, 'ok')
       reloadCameras?.()
     } catch (e) {
       toast(`Could not change the camera: ${e.message}`, 'danger')
@@ -134,13 +168,14 @@ export function Cameras({ ctx }) {
   }
 
   const liveIds = new Set(Object.keys(systemStatus?.cameras || {}))
+  const unplugged = new Set(local.unplugged)
 
   const rows = cameras.map((c) => {
-    const live = liveIds.has(c.camera_id)
+    const live = c.active && liveIds.has(c.camera_id)
     return {
       ...c,
       live,
-      health: healthOf(c, live),
+      health: healthOf(c, live, unplugged.has(c.camera_id)),
       fps: live ? systemStatus.cameras[c.camera_id]?.fps ?? null : null,
       threat: live ? systemStatus.cameras[c.camera_id]?.threat_score ?? null : null,
     }
@@ -151,7 +186,7 @@ export function Cameras({ ctx }) {
 
   const actions = (cam) => (
     <>
-      {isAdmin && <button className="btn btn-sm" onClick={() => handleToggle(cam)}>{cam.active ? 'Turn off' : 'Turn on'}</button>}
+      {isAdmin && <button className="btn btn-sm" onClick={() => handleToggle(cam)}>{cam.active ? 'Pause' : 'Resume'}</button>}
       {isAdmin && <button className="btn btn-sm" onClick={() => openAssign(cam)}>Assign officers</button>}
       {canManage && <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(cam)}>Delete</button>}
     </>
@@ -162,9 +197,37 @@ export function Cameras({ ctx }) {
       <div className="grid grid-4 mb">
         <Stat label="Cameras" value={rows.length} delta="Registered in the system" accent="primary" icon={Icons.camera} />
         <Stat label="Streaming" value={streaming} delta="Sending video to detection now" accent="ok" icon={Icons.live} />
-        <Stat label="No signal" value={enabled - streaming} delta="Turned on but not sending video" accent={enabled - streaming ? 'warn' : 'ok'} icon={Icons.alert} />
-        <Stat label="Turned off" value={rows.length - enabled} delta="Not monitored" accent={rows.length - enabled ? 'danger' : 'ok'} icon={Icons.eye} />
+        <Stat label="No signal" value={enabled - streaming} delta="In use but not sending video" accent={enabled - streaming ? 'warn' : 'ok'} icon={Icons.alert} />
+        <Stat label="Paused" value={rows.length - enabled} delta="Not monitored" accent={rows.length - enabled ? 'danger' : 'ok'} icon={Icons.eye} />
       </div>
+
+      {local.devices.length > 0 && (
+        <Card
+          className="mb"
+          title="Connected to this computer"
+          sub="A newly connected camera is listed here and stays unused until you choose to use it"
+        >
+          {local.devices.map((d) => {
+            const cam = cameras.find((c) => c.camera_id === d.camera_id)
+            return (
+              <div key={d.source} className="row">
+                <div>
+                  <b>{d.name}</b>
+                  <div className="meta">{cam ? `Used by ${cam.name || cam.camera_id}` : 'Detected, not in use'}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <Tag tone={!cam ? 'info' : cam.active ? 'ok' : 'danger'}>{!cam ? 'New' : cam.active ? 'In use' : 'Paused'}</Tag>
+                  {isAdmin && !cam && <button className="btn btn-sm btn-primary" onClick={() => startDevice(d)}>Use this camera</button>}
+                  {isAdmin && cam && <button className="btn btn-sm" onClick={() => handleToggle(cam)}>{cam.active ? 'Pause' : 'Resume'}</button>}
+                  {isAdmin && cam && !d.bound && d.source !== String(d.index) && (
+                    <button className="btn btn-sm" title="Keep this camera on this device even when other cameras are plugged in or removed" onClick={() => lockDevice(d)}>Lock to this device</button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </Card>
+      )}
 
       <Card
         title="Cameras"

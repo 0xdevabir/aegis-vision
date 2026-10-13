@@ -1,10 +1,23 @@
 {
   "name": "Aegis",
   "short_name": "Aegis",
-  "description": "Security camera dashboard: live video, alerts and evidence",
+  "description": "Smart surveillance command center: live video, watchlist alerts, evidence and GPS response",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1b1b1b",
   "theme_color": "#1b1b1b",
-  "icons": []
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

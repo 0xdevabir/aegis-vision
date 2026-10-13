@@ -45,8 +45,10 @@ cd frontend && npm run dev
 
 - `INTERNAL_API_KEY` in `.env` must match between backend and pipeline
 - Camera GPS in `config/cameras.yaml` or `config/config.yaml`
+- Local webcams: prefer `source: device:<unique id>` over an index (`utils/media/devices.py`). OpenCV numbers cameras in unique-ID order, so plugging one in renumbers the others. The Cameras page lists connected devices (`GET /api/v1/cameras/devices`); a new one stays unused until an admin clicks "Use this camera". Pause/Resume is the `enabled` flag in `cameras.yaml`
 - Press `S` for pipeline stats, `T` for thermal, `Q` to quit
 - Face work runs in worker subprocesses (`core/recognition/face_worker.py`, `FACE_WORKERS`, default 1): dlib next to PyTorch/MPS in one process segfaults. Detector is YuNet (`models/face_detection_yunet_2023mar.onnx`, fetched by `ensure_local_env.py`; dlib is the fallback)
 - Read model results (`read_boxes`) inside the model lock: MPS tensor reads outside it crash the process
 - Dashboard stream: `STREAM_HUD=clean|full`, `STREAM_FPS`, `STREAM_WIDTH`, `STREAM_QUALITY` (clean = people boxes only; full = local-window HUD)
+- Capture basket: while a critical subject is in view the pipeline uploads a zoomed still every `CAPTURE_INTERVAL_SECONDS` (`utils/alerts/capture.py` → `POST /api/v1/captures/ingest` → `ALERT_CAPTURE` on the alerts WebSocket → `frontend/src/components/CaptureBasket.jsx`). A still is only kept if a critical alert for that camera exists in the last 15 min. Gender/age come from the optional `models/genderage.onnx` (`utils/face_attributes.py`) and are estimates
 - Dev machine is an 8 GB MacBook: on battery / Low Power Mode or with Chrome+Cursor open it swaps and video stutters. Measure smoothness on AC power

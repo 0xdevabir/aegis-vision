@@ -167,7 +167,9 @@ function LoginForm({ onLogin, theme, setTheme, notice }) {
         {theme === 'dark' ? <Icons.sun /> : <Icons.moon />}
       </button>
       <form className="login-card" onSubmit={handleSubmit}>
-        <span className="brand-logo"><Icons.shield /></span>
+        <span className="brand-logo" aria-hidden="true">
+          <img src="/logo.svg" alt="" width="46" height="46" />
+        </span>
         <h1>Sign in to Aegis</h1>
         <p className="login-sub">Your cameras, alerts and evidence in one place.</p>
         {error && <div className="login-error" role="alert">{error}</div>}
@@ -266,8 +268,11 @@ function App() {
     }
   })
 
+  const [captureEvent, setCaptureEvent] = useState(null)   // newest capture-basket still
   const handleWsMessage = useCallback((data) => {
     if (data.alert_type === 'PIPELINE_HEARTBEAT') return
+    // A still for the capture basket, not an alert: it must not ring or fill the event feed.
+    if (data.alert_type === 'ALERT_CAPTURE') { if (data.capture) setCaptureEvent(data.capture); return }
     const formatted = formatEvent(data)
     setEvents((prev) => [formatted, ...prev].slice(0, 200))
     // A police officer is only paged for cameras assigned to them (unassigned alerts reach everyone).
@@ -442,7 +447,7 @@ function App() {
     report, summary, trends, locations,
     plates, vehicleDetections, auditLogs, reloadVehicles,
     me, streamingCams, reloadCameras, setPage, mapFocus,
-    reviewPending, refreshReviewCount,
+    reviewPending, refreshReviewCount, captureEvent,
     theme, setTheme,
   }
 
@@ -463,8 +468,10 @@ function App() {
       {sidebarOpen && <button type="button" className="sidebar-scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
-          <span className="brand-logo"><Icons.shield /></span>
-          <div>Aegis<small>Security cameras</small></div>
+          <span className="brand-logo" aria-hidden="true">
+            <img src="/logo.svg" alt="" width="34" height="34" />
+          </span>
+          <div>Aegis<small>Smart surveillance</small></div>
         </div>
         <div className="nav-scroll">
           {filterNavByRole(me?.role).map((group) => (

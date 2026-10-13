@@ -88,7 +88,12 @@ export const Icons = {
     <svg viewBox="0 0 24 24" {...stroke}><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
   ),
   shield: () => (
-    <svg viewBox="0 0 24 24" {...stroke}><path d="M12 2l8 3.5V11c0 5-3.4 8.6-8 11-4.6-2.4-8-6-8-11V5.5L12 2z"/></svg>
+    <svg viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 2.5l7.5 3.2V11c0 4.7-3.2 8.1-7.5 10.3C7.7 19.1 4.5 15.7 4.5 11V5.7L12 2.5z"/>
+      <path d="M8.2 11.2a3.8 3.8 0 0 1 7.6 0" opacity="0.7"/>
+      <path d="M12 8.6l2.4 1.4v2.8L12 14.2l-2.4-1.4V10z"/>
+      <circle cx="12" cy="11.4" r="1.05"/>
+    </svg>
   ),
   eye: () => (
     <svg viewBox="0 0 24 24" {...stroke}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -149,7 +154,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 const modalStack = []   // only the top-most dialog reacts to Esc/Tab
 
 /** Accessible dialog: role/aria, Esc to close, Tab stays inside, focus returns to the opener. */
-export function Modal({ title, onClose, children, footer }) {
+export function Modal({ title, onClose, children, footer, className = '' }) {
   const ref = useRef(null)
   const titleId = useId()
   useEffect(() => {
@@ -177,7 +182,7 @@ export function Modal({ title, onClose, children, footer }) {
   }, [onClose])
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${className}`} ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span id={titleId}>{title}</span>
           <button className="icon-btn" onClick={onClose} aria-label="Close dialog"><Icons.close /></button>

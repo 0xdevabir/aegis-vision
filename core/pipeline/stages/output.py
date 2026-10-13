@@ -8,6 +8,7 @@ import threading
 from core.pipeline.base import PipelineStage, FrameContext
 from utils.data import save_evidence_db
 from utils.alerts import NotificationHub
+from utils.alerts.capture import AlertCapturer
 from core.analysis.weapon_confirm import UNASSIGNED, WeaponConfirmer, associate
 
 logger = logging.getLogger("HumanAnalysis")
@@ -28,6 +29,7 @@ class OutputStage(PipelineStage):
             alarm_interval=alarm_interval_seconds,
         )
         self._last_saved: dict = {}
+        self.capturer = AlertCapturer()
         self.weapon_confirmer = WeaponConfirmer(window=5, min_hits=3)
         # Fire/smoke flickers more than weapons do: demand a longer persistence.
         self.fire_confirmer = WeaponConfirmer(window=8, min_hits=5)
@@ -37,6 +39,11 @@ class OutputStage(PipelineStage):
         location = ctx.camera_location or self.camera_location
         camera_id = ctx.camera_id
         fh, fw = ctx.frame.shape[:2]
+        # Red alert in view: a zoomed still of the subject goes to the capture basket every few seconds.
+        capture_meta = dict(
+            camera_id=camera_id, camera_location=location, camera_name=ctx.camera_name,
+            camera_lat=ctx.camera_lat, camera_lng=ctx.camera_lng,
+        )
 
         # Weapon evidence must be attached to a person track and persist over frames.
         assigned = associate(ctx.weapon_detections, ctx.tracks)
@@ -52,6 +59,10 @@ class OutputStage(PipelineStage):
                 kind=best_fire.get("class_name", "fire"), confidence=best_fire["score"],
                 camera_lat=ctx.camera_lat, camera_lng=ctx.camera_lng,
             )
+            self.capturer.capture(
+                "fire", now, ctx.frame, best_fire.get("bbox"), alert_type="FIRE_SMOKE_DETECTED",
+                confidence=best_fire["score"], **capture_meta,
+            )
 
         for tid in ctx.fall_tracks:
             self.notifications.fall_suspected(
@@ -65,6 +76,11 @@ class OutputStage(PipelineStage):
                 track_id=UNASSIGNED, now=now,
                 camera_lat=ctx.camera_lat, camera_lng=ctx.camera_lng,
                 confidence=ctx.confirmed_weapons[UNASSIGNED]["score"],
+            )
+            self.capturer.capture(
+                "weapon", now, ctx.frame, ctx.confirmed_weapons[UNASSIGNED].get("bbox"),
+                alert_type="WEAPON_DETECTED",
+                confidence=ctx.confirmed_weapons[UNASSIGNED]["score"], **capture_meta,
             )
 
         for track in ctx.tracks:
@@ -109,6 +125,16 @@ class OutputStage(PipelineStage):
                     camera_lat=ctx.camera_lat,
                     camera_lng=ctx.camera_lng,
                     confidence=ctx.confirmed_weapons[track_id]["score"],
+                )
+
+            if is_criminal or has_weapon:
+                self.capturer.capture(
+                    f"track_{track_id}", now, ctx.frame, (x1, y1, x2, y2),
+                    alert_type="CRIMINAL_DETECTED" if is_criminal else "WEAPON_DETECTED",
+                    track_id=track_id, person_name=name if is_criminal else None,
+                    confidence=(ctx.identity_conf.get(track_id) if is_criminal
+                                else ctx.confirmed_weapons[track_id]["score"]),
+                    **capture_meta,
                 )
 
             if is_suspicious:

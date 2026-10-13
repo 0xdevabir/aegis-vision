@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo-lockup.svg" alt="Aegis - Smart Surveillance System" width="420" />
+</p>
+
 # Aegis
 
 ### See the threat, pin the place, alert the operators — before the moment passes

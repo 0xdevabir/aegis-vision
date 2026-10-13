@@ -223,6 +223,32 @@ def publish_event_clip(
     threading.Thread(target=_send, daemon=True).start()
 
 
+def publish_capture(camera_id: str, jpeg_bytes: bytes, fields: dict) -> None:
+    """Upload one red-alert capture (zoomed subject still) to the dashboard's capture basket."""
+    if not AUTO_ALERTS_ENABLED:
+        return
+
+    def _send():
+        try:
+            import httpx
+
+            data = {k: str(v) for k, v in fields.items() if v is not None and v != ""}
+            data["camera_id"] = camera_id
+            resp = httpx.post(
+                f"{BACKEND_URL}/api/v1/captures/ingest",
+                data=data,
+                files={"file": ("capture.jpg", jpeg_bytes, "image/jpeg")},
+                headers={"X-Internal-Key": INTERNAL_API_KEY},
+                timeout=8.0,
+            )
+            if resp.status_code >= 400:
+                logger.warning(f"Capture ingest returned {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Capture ingest failed: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
 def publish_heartbeat(
     camera_id: str,
     camera_location: str = "",

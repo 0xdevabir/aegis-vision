@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+from .devices import DEVICE_PREFIX, device_index
+
 logger = logging.getLogger("HumanAnalysis")
 
 class ThreadedCamera:
@@ -208,6 +210,9 @@ def open_capture(source, max_retries: int = 5, retry_delay: float = 2.0):
     import cv2
 
     resolved = resolve_source(source)
+    if isinstance(resolved, str) and resolved.startswith(DEVICE_PREFIX):
+        # Looked up on every open: raises while the device is unplugged, so the caller keeps retrying.
+        resolved = device_index(resolved[len(DEVICE_PREFIX):])
     is_network = isinstance(resolved, str) and (
         resolved.startswith("rtsp://")
         or resolved.startswith("http://")

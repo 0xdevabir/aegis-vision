@@ -24,6 +24,7 @@ from core.runtime import run_camera_loop
 from paths import CONFIG_YAML, EVIDENCE_DIR, ROOT
 from utils.config import load_cameras_config, load_yaml, expand_env, get_camera_geo
 from utils.media import fresh_process_sees_webcam, resolve_source
+from utils.media.devices import DEVICE_PREFIX, CameraListStale, device_connected, snapshot_local_cameras
 from utils.system import logger
 
 cv2.setNumThreads(0)
@@ -48,6 +49,14 @@ def _hotplug_restart_allowed(min_gap: float = 600.0) -> bool:
     except OSError:
         return False
     return True
+
+
+def _connected_now(source) -> bool:
+    """True if a local webcam source is plugged in right now, whatever this process believes."""
+    if isinstance(source, int):
+        return fresh_process_sees_webcam(source)
+    return (isinstance(source, str) and source.startswith(DEVICE_PREFIX)
+            and device_connected(source[len(DEVICE_PREFIX):]))
 
 
 def _resolve_camera_index(cfg):
@@ -114,8 +123,8 @@ def _start_camera_thread(cam_cfg, cfg, base_dir, show_window):
                 )
             except Exception as e:
                 logger.error(f"[{cam_id}] camera unavailable: {e}")
-                if (sys.platform == "darwin" and isinstance(source, int)
-                        and fresh_process_sees_webcam(source) and _hotplug_restart_allowed()):
+                if isinstance(e, CameraListStale) or (
+                        sys.platform == "darwin" and _connected_now(source) and _hotplug_restart_allowed()):
                     # macOS never refreshes this process's camera list: a webcam plugged in after
                     # start stays invisible here until the pipeline restarts.
                     logger.warning(f"[{cam_id}] webcam {source} was plugged in after start — restarting pipeline")
@@ -152,6 +161,7 @@ def main():
     target_fps = cfg.get("target_fps", 30)
 
     if args.multi:
+        snapshot_local_cameras()
         cameras = load_cameras_config(base_dir)
         if not cameras:
             # Keep running: the hot-reload loop below starts cameras as soon as one is enabled

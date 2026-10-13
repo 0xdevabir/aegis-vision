@@ -124,6 +124,42 @@ def list_cameras(db: Session = Depends(get_db), user: User = Depends(operator_or
 import yaml
 from pathlib import Path
 
+
+@router.get("/devices")
+def list_devices(db: Session = Depends(get_db), user: User = Depends(operator_or_admin)):
+    """Cameras connected to this machine, and the registered camera (if any) that uses each one.
+
+    A newly connected camera shows up here unused: nothing runs on it until someone adds it.
+    """
+    from utils.media.devices import DEVICE_PREFIX, list_local_cameras
+
+    devices = list_local_cameras()
+    by_source = {}
+    for cam in sorted(db.query(Camera).all(), key=lambda c: not c.active):    # a running camera wins a shared device
+        by_source.setdefault(str(cam.rtsp_url if cam.rtsp_url is not None else "").strip(), cam)
+    for d in devices:
+        bound = by_source.get(d["source"])
+        cam = bound or by_source.get(str(d["index"]))
+        d["camera_id"] = cam.camera_id if cam else None
+        d["camera_name"] = cam.name if cam else None
+        d["active"] = bool(cam and cam.active)
+        # False for a camera set up by index: that index moves when cameras are plugged in or out.
+        d["bound"] = bool(bound)
+
+    connected = {d["source"] for d in devices} | {str(d["index"]) for d in devices}
+    unplugged = [
+        cam.camera_id for source, cam in by_source.items()
+        if devices and (source.isdigit() or source.startswith(DEVICE_PREFIX)) and source not in connected
+    ]
+    return {"devices": devices, "unplugged": unplugged}
+
+
+def _forget_heartbeat(camera_id: str):
+    """A camera that was just paused must not keep showing as streaming."""
+    from backend.api.system_routes import _pipeline_status
+    _pipeline_status["cameras"].pop(camera_id, None)
+
+
 def sync_camera_to_yaml(cam: Camera):
     yaml_path = Path("config/cameras.yaml")
     if not yaml_path.exists():
@@ -196,6 +232,8 @@ def update_camera(camera_id: str, cam: CameraCreate, request: Request, db: Sessi
     db.commit()
     db.refresh(camera)
     sync_camera_to_yaml(camera)
+    if not camera.active:
+        _forget_heartbeat(camera_id)
     return camera
 
 
@@ -206,6 +244,7 @@ def delete_camera(camera_id: str, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Camera not found")
     camera.active = False
     sync_camera_to_yaml(camera)
+    _forget_heartbeat(camera_id)
     log_audit(db, admin, "CAMERA_DELETE", "camera", camera_id, f"name={camera.name}", request)
     db.delete(camera)
     db.commit()

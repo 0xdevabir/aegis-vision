@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="stitle sdesc">
+  <title id="stitle">Aegis Official Seal</title>
+  <desc id="sdesc">Circular institutional seal for Aegis smart surveillance</desc>
+  <defs>
+    <pattern id="seal-lattice" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+      <path d="M0 0H7M0 0V7" stroke="#dce6d6" stroke-width="0.5" opacity="0.2"/>
+    </pattern>
+    <linearGradient id="seal-face" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#c5d4be"/>
+      <stop offset="50%" stop-color="#a8bca1"/>
+      <stop offset="100%" stop-color="#6f8569"/>
+    </linearGradient>
+    <radialGradient id="seal-well" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#2a3a2e"/>
+      <stop offset="100%" stop-color="#101812"/>
+    </radialGradient>
+    <path id="seal-ring" d="M128,128 m-98,0 a98,98 0 1,1 196,0 a98,98 0 1,1 -196,0"/>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="#1b1b1b"/>
+  <circle cx="128" cy="128" r="118" fill="none" stroke="#a8bca1" stroke-width="2.4"/>
+  <circle cx="128" cy="128" r="108" fill="none" stroke="#3a4638" stroke-width="1"/>
+  <text font-family="Georgia, 'Times New Roman', serif" font-size="13" letter-spacing="3.2" fill="#d7e3d1" font-weight="600">
+    <textPath href="#seal-ring" startOffset="12%">AEGIS  *  SMART SURVEILLANCE  *  PROTECT  *  DETECT  *  RESPOND  *</textPath>
+  </text>
+  <circle cx="128" cy="128" r="86" fill="#141c16" stroke="#8fa68a" stroke-width="1.4"/>
+  <path d="M128 52 L172 68 V100 C172 130 152 152 128 166 C104 152 84 130 84 100 V68 Z" fill="url(#seal-face)" stroke="#e4eddf" stroke-width="1.8"/>
+  <path d="M128 60 L164 73 V99 C164 125 148 144 128 156 C108 144 92 125 92 99 V73 Z" fill="url(#seal-well)"/>
+  <path d="M128 60 L164 73 V99 C164 125 148 144 128 156 C108 144 92 125 92 99 V73 Z" fill="url(#seal-lattice)"/>
+  <g fill="none" stroke="#c9d8c2" stroke-linecap="round" opacity="0.55">
+    <path d="M106 108 A22 22 0 0 1 150 108" stroke-width="1.2"/>
+    <path d="M100 111 A28 28 0 0 1 156 111" stroke-width="1"/>
+    <path d="M94 115 A34 34 0 0 1 162 115" stroke-width="0.9"/>
+  </g>
+  <g stroke="#d7e3d1" stroke-width="1.2" stroke-linecap="round" opacity="0.75">
+    <path d="M128 84 V90"/><path d="M128 130 V136"/><path d="M104 110 H110"/><path d="M146 110 H152"/>
+  </g>
+  <g transform="translate(128 110)">
+    <circle r="18" fill="none" stroke="#dce8d6" stroke-width="1.5" opacity="0.85"/>
+    <path d="M0 -12 L10.4 -6 L10.4 6 L0 12 L-10.4 6 L-10.4 -6 Z" fill="#0e1410" stroke="#b7c9b0" stroke-width="1.2"/>
+    <circle r="5.6" fill="#a8bca1"/>
+    <circle r="2.3" fill="#1b1b1b"/>
+    <circle cx="-1.7" cy="-1.9" r="1" fill="#eef4ea" opacity="0.85"/>
+  </g>
+  <text x="128" y="198" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="11" letter-spacing="4" fill="#8fa68a">COMMAND CENTER</text>
+</svg>

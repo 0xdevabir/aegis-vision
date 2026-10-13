@@ -99,6 +99,10 @@ export async function fetchCameras() {
   return apiFetch('/cameras/');
 }
 
+export async function fetchCameraDevices() {
+  return apiFetch('/cameras/devices');
+}
+
 export async function resolveIp(url) {
   return apiFetch(`/cameras/resolve-ip?url=${encodeURIComponent(url)}`);
 }
@@ -308,6 +312,17 @@ export async function saveCameraGeometry(cameraId, { zones, lines }) {
 export function evidenceImageUrl(evidenceId, kind = 'frame') {
   const token = getToken();
   return `${API_BASE}/evidence/${evidenceId}/image?kind=${kind}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+}
+
+/* ---- Red-alert capture basket ---- */
+export async function fetchCaptures(limit = 60) {
+  return apiFetch(`/captures/?limit=${limit}`);
+}
+
+export function captureImageUrl(captureId, width) {
+  const token = getToken();
+  const q = [width ? `w=${width}` : '', token ? `token=${encodeURIComponent(token)}` : ''].filter(Boolean).join('&');
+  return `${API_BASE}/captures/${captureId}/image${q ? `?${q}` : ''}`;
 }
 
 /* ---- Incidents ---- */

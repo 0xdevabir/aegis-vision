@@ -1,4 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="9" fill="#1b1b1b"/>
-  <path d="M16 6.5l8 3.4v5.6c0 4.9-3.4 8.4-8 10.6-4.6-2.2-8-5.7-8-10.6V9.9l8-3.4z" fill="#a8bca1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Aegis">
+  <defs>
+    <linearGradient id="f" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#c5d4be"/>
+      <stop offset="100%" stop-color="#7f9478"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="#1b1b1b"/>
+  <!-- Shield -->
+  <path d="M16 4.5 L26.5 9 V16.2 C26.5 22.2 22.2 26.6 16 29.5 C9.8 26.6 5.5 22.2 5.5 16.2 V9 Z"
+        fill="url(#f)"/>
+  <!-- Well -->
+  <path d="M16 6.6 L24.2 10 V16 C24.2 21 21 24.6 16 27 C11 24.6 7.8 21 7.8 16 V10 Z"
+        fill="#162018"/>
+  <!-- Coverage arcs -->
+  <path d="M11.2 15.2 A4.8 4.8 0 0 1 20.8 15.2" fill="none" stroke="#c9d8c2" stroke-width="0.7" opacity="0.75"/>
+  <path d="M9.8 15.8 A6.2 6.2 0 0 1 22.2 15.8" fill="none" stroke="#c9d8c2" stroke-width="0.55" opacity="0.45"/>
+  <!-- Aperture -->
+  <path d="M16 11.6 L19.4 13.55 V17.45 L16 19.4 L12.6 17.45 V13.55 Z"
+        fill="#0e1410" stroke="#b7c9b0" stroke-width="0.55"/>
+  <circle cx="16" cy="15.5" r="1.55" fill="#a8bca1"/>
+  <circle cx="16" cy="15.5" r="0.65" fill="#1b1b1b"/>
 </svg>

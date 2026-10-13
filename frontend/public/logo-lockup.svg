@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 128" role="img" aria-labelledby="ltitle">
+  <title id="ltitle">Aegis Smart Surveillance</title>
+  <defs>
+    <pattern id="lk-lattice" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+      <path d="M0 0H8M0 0V8" stroke="#dce6d6" stroke-width="0.55" opacity="0.22"/>
+    </pattern>
+    <linearGradient id="lk-face" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#c5d4be"/>
+      <stop offset="45%" stop-color="#a8bca1"/>
+      <stop offset="100%" stop-color="#7f9478"/>
+    </linearGradient>
+    <radialGradient id="lk-well" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#2a3a2e"/>
+      <stop offset="100%" stop-color="#121a15"/>
+    </radialGradient>
+    <clipPath id="lk-clip">
+      <path d="M64 10 L106 26 V58 C106 86 88 106 64 118 C40 106 22 86 22 58 V26 Z"/>
+    </clipPath>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#1b1b1b"/>
+  <path d="M64 10 L106 26 V58 C106 86 88 106 64 118 C40 106 22 86 22 58 V26 Z" fill="url(#lk-face)" stroke="#e4eddf" stroke-width="2.2"/>
+  <path d="M64 18 L98 31.5 V57 C98 81 83 98 64 108.5 C45 98 30 81 30 57 V31.5 Z" fill="url(#lk-well)"/>
+  <g clip-path="url(#lk-clip)">
+    <path d="M64 18 L98 31.5 V57 C98 81 83 98 64 108.5 C45 98 30 81 30 57 V31.5 Z" fill="url(#lk-lattice)"/>
+  </g>
+  <g fill="none" stroke="#c9d8c2" stroke-linecap="round" opacity="0.55">
+    <path d="M44 56 A20 20 0 0 1 84 56" stroke-width="1.1"/>
+    <path d="M38 58 A26 26 0 0 1 90 58" stroke-width="1"/>
+  </g>
+  <g stroke="#d7e3d1" stroke-width="1.15" stroke-linecap="round" opacity="0.7">
+    <path d="M64 34 V40"/><path d="M64 78 V84"/><path d="M42 59 H48"/><path d="M80 59 H86"/>
+  </g>
+  <g transform="translate(64 59)">
+    <circle r="16.5" fill="none" stroke="#dce8d6" stroke-width="1.6" opacity="0.85"/>
+    <path d="M0 -11 L9.5 -5.5 L9.5 5.5 L0 11 L-9.5 5.5 L-9.5 -5.5 Z" fill="#0e1410" stroke="#b7c9b0" stroke-width="1.15"/>
+    <circle r="5.2" fill="#a8bca1"/>
+    <circle r="2.2" fill="#1b1b1b"/>
+    <circle cx="-1.6" cy="-1.8" r="0.9" fill="#eef4ea" opacity="0.85"/>
+  </g>
+  <path d="M64 96 L72 102 L64 108 L56 102 Z" fill="#d7e3d1" opacity="0.9"/>
+  <text x="156" y="72" font-family="Georgia, 'Times New Roman', 'Liberation Serif', serif" font-size="52" font-weight="700" letter-spacing="4" fill="#1b1b1b">AEGIS</text>
+  <text x="158" y="98" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="14" font-weight="600" letter-spacing="3.6" fill="#5c6b58">SMART SURVEILLANCE SYSTEM</text>
+</svg>

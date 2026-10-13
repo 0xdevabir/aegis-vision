@@ -125,22 +125,31 @@ function formatEvent(evt) {
   }
 }
 
+// Local dev only: credentials come from frontend/.env.development.local (gitignored, never loaded by `vite build`).
+const DEMO_LOGIN = import.meta.env.DEV && import.meta.env.VITE_DEMO_USERNAME && import.meta.env.VITE_DEMO_PASSWORD
+  ? { username: import.meta.env.VITE_DEMO_USERNAME, password: import.meta.env.VITE_DEMO_PASSWORD }
+  : null
+
 function LoginForm({ onLogin, theme, setTheme, notice }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(notice || '')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const signIn = async (user, pass) => {
     setLoading(true); setError('')
     try {
-      await onLogin(username, password)
+      await onLogin(user, pass)
     } catch (err) {
       setError(err.message || 'Login failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    signIn(username, password)
   }
 
   return (
@@ -161,6 +170,9 @@ function LoginForm({ onLogin, theme, setTheme, notice }) {
         <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required /></label>
         <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
         <button type="submit" className="btn btn-primary" disabled={loading || !username || !password}>{loading ? 'Signing in…' : 'Sign in'}</button>
+        {DEMO_LOGIN && (
+          <button type="button" className="btn login-demo-btn" disabled={loading} onClick={() => signIn(DEMO_LOGIN.username, DEMO_LOGIN.password)}>Demo login</button>
+        )}
       </form>
     </div>
   )

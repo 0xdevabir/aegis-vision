@@ -33,14 +33,35 @@ fi
 echo ""
 echo "3. Creating virtualenv and installing Python dependencies..."
 BOOT=""
-for cand in python3.12 python3.11 python3.10 python3; do
+for cand in python3.12 python3.11 python3.10; do
   if command -v "$cand" >/dev/null 2>&1; then BOOT="$cand"; break; fi
 done
+# Also accept Homebrew keg-only paths
 if [ -z "$BOOT" ]; then
-  echo "ERROR: Need Python 3.10–3.12"
+  for cand in /opt/homebrew/opt/python@3.12/bin/python3.12 \
+              /opt/homebrew/opt/python@3.11/bin/python3.11 \
+              /usr/local/opt/python@3.12/bin/python3.12; do
+    if [ -x "$cand" ]; then BOOT="$cand"; break; fi
+  done
+fi
+if [ -z "$BOOT" ]; then
+  echo "ERROR: Need Python 3.10–3.12 (not 3.13+)."
+  echo "  Install: brew install python@3.12"
   exit 1
 fi
+# Recreate venv if missing or built with the wrong major.minor
+NEED_VENV=0
 if [ ! -x ".venv/bin/python" ]; then
+  NEED_VENV=1
+else
+  VENV_VER="$(.venv/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "?")"
+  case "$VENV_VER" in
+    3.10|3.11|3.12) ;;
+    *) echo "   Existing .venv is Python $VENV_VER — recreating with $BOOT…"; NEED_VENV=1 ;;
+  esac
+fi
+if [ "$NEED_VENV" = 1 ]; then
+  rm -rf .venv
   echo "   Creating .venv with $BOOT…"
   "$BOOT" -m venv .venv
   .venv/bin/pip install -q --upgrade pip
@@ -80,4 +101,5 @@ echo "    .venv/bin/uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 echo "    .venv/bin/python main.py --video data/demo/clips/sample.mp4"
 echo "    cd frontend && npm run dev"
 echo ""
+
 

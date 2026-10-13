@@ -8,7 +8,7 @@ from backend.models.audit_log import AuditLog
 from backend.db.database import get_db
 from backend.models.user import User
 from backend.auth.auth import (
-    hash_password, verify_password, create_access_token,
+    hash_password, verify_password, issue_token, revoke_tokens,
     get_current_user, admin_only, operator_or_admin, VALID_ROLES, ROLES_OPS,
 )
 
@@ -100,8 +100,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user.locked_until = None
     _audit(db, "LOGIN", user, user.username, "ok", request)
     db.commit()
-    token = create_access_token({"user_id": user.id, "role": user.role})
-    return LoginResponse(access_token=token, user_id=user.id, role=user.role)
+    return LoginResponse(access_token=issue_token(user), user_id=user.id, role=user.role)
 
 
 @router.post("/users", response_model=UserResponse)
@@ -147,9 +146,19 @@ def change_password(body: ChangePassword, request: Request, db: Session = Depend
     if not verify_password(body.current_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     user.hashed_password = hash_password(body.new_password)
+    revoke_tokens(user)                 # a stolen token must not outlive the password it came from
     _audit(db, "PASSWORD_CHANGE", user, user.username, "self-service", request)
     db.commit()
-    return {"status": "changed"}
+    return {"status": "changed", "access_token": issue_token(user)}     # keeps this session signed in
+
+
+@router.post("/logout-all")
+def logout_all(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Sign this account out on every device."""
+    revoke_tokens(user)
+    _audit(db, "LOGOUT_ALL", user, user.username, "all sessions revoked", request)
+    db.commit()
+    return {"status": "revoked"}
 
 
 class UserPatch(BaseModel):
@@ -175,6 +184,9 @@ def update_user(user_id: int, body: UserPatch, request: Request, db: Session = D
         raise HTTPException(status_code=400, detail=f"Invalid role. Allowed: {', '.join(sorted(VALID_ROLES))}")
     if target.id == admin.id and (changes.get("is_active") is False or changes.get("role", "admin") != "admin"):
         raise HTTPException(status_code=400, detail="You cannot disable or demote your own account")
+    if (changes.get("new_password") or changes.get("is_active") is False
+            or changes.get("role", target.role) != target.role):
+        revoke_tokens(target)           # reset, disable or role change ends the user's open sessions
     if "role" in changes:
         target.role = changes["role"]
     if "is_active" in changes and changes["is_active"] is not None:
@@ -195,8 +207,7 @@ def update_user(user_id: int, body: UserPatch, request: Request, db: Session = D
 @router.post("/refresh", response_model=LoginResponse)
 def refresh_token(user: User = Depends(get_current_user)):
     """Sliding session: a still-valid token buys a fresh one, so an open control-room screen never expires."""
-    return LoginResponse(access_token=create_access_token({"user_id": user.id, "role": user.role}),
-                         user_id=user.id, role=user.role)
+    return LoginResponse(access_token=issue_token(user), user_id=user.id, role=user.role)
 
 
 @router.get("/me", response_model=UserResponse)

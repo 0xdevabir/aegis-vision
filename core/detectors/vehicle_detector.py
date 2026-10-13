@@ -2,7 +2,7 @@ from core.detectors.device import lock_for, read_boxes
 
 import numpy as np
 from ultralytics import YOLO
-from core.tracking.tracker import hist_embed, make_deepsort
+from core.tracking.tracker import hist_embed, make_tracker
 
 
 VEHICLE_CLASSES = {
@@ -31,15 +31,18 @@ class VehicleDetector:
 
 
 class VehicleTracker:
-    def __init__(self, appearance: str = "histogram"):
+    def __init__(self, appearance: str = "histogram", algorithm: str = "deepsort"):
         self.appearance = appearance
-        self.tracker = make_deepsort(
-            appearance,
+        self.tracker, self._bytetrack = make_tracker(
+            algorithm, appearance,
             max_age=30, n_init=3, max_iou_distance=0.7,
             max_cosine_distance=0.3, nn_budget=50,
         )
 
     def track(self, detections, frame):
+        if self._bytetrack:
+            return self.tracker.update([v["bbox"] for v in detections], [v["score"] for v in detections],
+                                       [v["class_id"] for v in detections])
         deepsort_dets = []
         for v in detections:
             x1, y1, x2, y2 = v["bbox"]

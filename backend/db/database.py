@@ -134,7 +134,7 @@ Base = declarative_base()
 def init_db():
     from backend.models import (
         user, face_encoding, evidence, audit_log, known_person, person_image,
-        camera, alert, vehicle, config_entry, incident, custody, recording, calibration, event,
+        camera, alert, vehicle, config_entry, incident, custody, recording, calibration, event, camera_officer,
     )
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
@@ -156,6 +156,7 @@ _ADDITIVE_COLUMNS = [
     ("cameras", "heading", "FLOAT"),
     ("cameras", "fov", "FLOAT"),
     ("cameras", "range_m", "FLOAT"),
+    ("users", "token_version", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

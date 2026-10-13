@@ -8,8 +8,10 @@ import logging
 from collections import defaultdict
 from core.pipeline.base import PipelineStage, FrameContext
 from core.analysis.behavior import is_suspicious_behavior
+from core.analysis.anpr import PlateVoter
 from core.analysis.fall import FallDetector
 from core.analysis.pose import assign_poses
+from core.analysis.weapon_confirm import overlap_ratio
 
 logger = logging.getLogger("HumanAnalysis")
 
@@ -19,7 +21,7 @@ class BehaviorStage(PipelineStage):
 
     def __init__(self, pose_analyzer=None, anomaly_detector=None,
                  anpr=None, plate_db=None, fall_detector=None,
-                 pose_every_n: int = 2, enabled: bool = True):
+                 pose_every_n: int = 2, anpr_every_n: int = 3, enabled: bool = True):
         super().__init__(name="behavior", enabled=enabled)
         self.pose_analyzer = pose_analyzer
         self.anomaly_detector = anomaly_detector
@@ -29,6 +31,10 @@ class BehaviorStage(PipelineStage):
         self.pose_every_n = max(1, pose_every_n)   # pose is the costliest per-frame step
         self._frames = 0
         self._last_poses = {}
+        self.anpr_every_n = max(1, anpr_every_n)
+        self.plate_voter = PlateVoter()
+        self._plates = {}                    # vehicle track id → confirmed plate
+        self._plates_logged = set()
 
         # Per-track trajectory history
         self._track_history = defaultdict(list)
@@ -71,7 +77,7 @@ class BehaviorStage(PipelineStage):
 
             # Update trajectory history (keep last 30 seconds)
             cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-            self._track_history[track_id].append((now, cx, cy))
+            self._track_history[track_id].append((now, cx, cy, y2 - y1))
             self._track_history[track_id] = [
                 p for p in self._track_history[track_id] if now - p[0] <= 30
             ]
@@ -98,28 +104,62 @@ class BehaviorStage(PipelineStage):
             except Exception as e:
                 logger.warning(f"Anomaly detection error: {e}")
 
-        # --- ANPR on vehicle detections ---
         if self.anpr is not None:
-            for v in ctx.vehicle_detections:
-                vx1, vy1, vx2, vy2 = v["bbox"]
+            self._run_anpr(ctx)
+
+        return ctx
+
+
+    def _run_anpr(self, ctx: FrameContext) -> None:
+        """Read plates per vehicle track and publish them only once confirmed by voting.
+
+        OCR is the slowest step in the pipeline, so a vehicle is read every
+        `anpr_every_n` frames and not at all once its plate is confirmed.
+        """
+        boxes = {t.track_id: tuple(map(int, t.to_ltrb()))
+                 for t in ctx.vehicle_tracks if t.is_confirmed()}
+        self.plate_voter.prune(boxes)
+        for tid in [k for k in self._plates if k not in boxes]:
+            del self._plates[tid]
+
+        for v in ctx.vehicle_detections:
+            vx1, vy1, vx2, vy2 = v["bbox"]
+            tid = max(boxes, key=lambda k: overlap_ratio(v["bbox"], boxes[k]), default=None)
+            if tid is None or overlap_ratio(v["bbox"], boxes[tid]) < 0.5:
+                continue                     # no stable track yet: nothing to vote on
+            if tid not in self._plates and self._frames % self.anpr_every_n == 0:
                 vehicle_roi = ctx.frame[vy1:vy2, vx1:vx2]
                 if vehicle_roi.size == 0:
                     continue
                 try:
-                    plates = self.anpr.detect_plates(vehicle_roi)
-                    for plate in plates:
-                        # Adjust plate coordinates to frame space
-                        px1, py1, px2, py2 = plate["bbox"]
-                        plate["bbox"] = (px1 + vx1, py1 + vy1, px2 + vx1, py2 + vy1)
-                        plate["vehicle_bbox"] = v["bbox"]
-                        ctx.plate_detections.append(plate)
-
-                        # Check watchlist
-                        if self.plate_db and self.plate_db.is_watchlisted(plate["plate_number"]):
-                            ctx.watchlisted_plates.append(plate)
-                            logger.warning(f"WATCHLISTED PLATE: {plate['plate_number']}")
+                    reads = self.anpr.detect_plates(vehicle_roi)
                 except Exception as e:
                     logger.warning(f"ANPR error: {e}")
-
-        return ctx
-
+                    continue
+                best = max(reads, key=lambda r: r["confidence"], default=None)
+                self.plate_voter.add(tid, best["plate_number"] if best else None)
+                number = self.plate_voter.confirmed(tid)
+                if number and best and best["plate_number"] == number:
+                    w, h = max(1, vx2 - vx1), max(1, vy2 - vy1)
+                    px1, py1, px2, py2 = best["bbox"]
+                    self._plates[tid] = {
+                        "plate_number": number, "confidence": best["confidence"],
+                        "rel": (px1 / w, py1 / h, px2 / w, py2 / h),   # follows the vehicle as it moves
+                    }
+            plate = self._plates.get(tid)
+            if plate is None:
+                continue
+            w, h = vx2 - vx1, vy2 - vy1
+            r = plate["rel"]
+            out = {
+                "plate_number": plate["plate_number"], "confidence": plate["confidence"],
+                "bbox": (int(vx1 + r[0] * w), int(vy1 + r[1] * h), int(vx1 + r[2] * w), int(vy1 + r[3] * h)),
+                "vehicle_bbox": v["bbox"], "track_id": tid,
+            }
+            ctx.plate_detections.append(out)
+            if self.plate_db and self.plate_db.is_watchlisted(out["plate_number"]):
+                ctx.watchlisted_plates.append(out)
+                if tid not in self._plates_logged:
+                    self._plates_logged.add(tid)
+                    logger.warning(f"WATCHLISTED PLATE: {out['plate_number']}")
+        self._plates_logged &= set(boxes)

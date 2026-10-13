@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, HTTPException
-from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from backend.auth.auth import ALGORITHM, ROLES_OPS, SECRET_KEY
+from backend.auth.auth import ROLES_OPS, user_from_token
 from backend.db.database import SessionLocal, get_db
 from backend.models.user import User
 
@@ -38,12 +37,10 @@ def viewer_user(token: Optional[str], db: Session) -> User:
     if not token:
         raise HTTPException(status_code=401, detail="Token required")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+        user = user_from_token(token, db)
+    except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
-    user_id = payload.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first() if user_id is not None else None
-    if user is None or not user.is_active:
+    if not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid token")
     if user.role not in ROLES_OPS:
         raise HTTPException(status_code=403, detail="Operational access required")

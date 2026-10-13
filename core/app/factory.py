@@ -108,8 +108,10 @@ def build_pipeline(cfg, base_dir, camera_location=None, zones=None, lines=None):
         logger.warning(f"Vehicle detector DISABLED: model not found at {vehicle_model_path}")
 
     appearance = cfg.get("tracking", {}).get("appearance", "histogram")
-    human_tracker = HumanTracker(appearance)
-    vehicle_tracker = VehicleTracker(appearance)
+    algorithm = cfg.get("tracking", {}).get("algorithm", "deepsort")
+    human_tracker = HumanTracker(appearance, algorithm)
+    vehicle_tracker = VehicleTracker(appearance, algorithm)
+    logger.info(f"Tracker: {algorithm}" + ("" if algorithm == "bytetrack" else f" ({appearance})"))
     face_recognizer = _shared(
         ("face", face_tolerance),
         lambda: FaceRecognizerDB(tolerance=face_tolerance, cache_ttl=30.0,
@@ -189,6 +191,7 @@ def build_pipeline(cfg, base_dir, camera_location=None, zones=None, lines=None):
         anpr=anpr,
         plate_db=plate_db,
         pose_every_n=pose_cfg.get("every_n_frames", 2),
+        anpr_every_n=anpr_cfg.get("every_n_frames", 3),
     ))
     pipeline.add_stage(AnalyticsStage())
     pipeline.add_stage(OutputStage(

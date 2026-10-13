@@ -21,6 +21,10 @@ def client(monkeypatch):
     def login():
         return {"ok": True}
 
+    @app.api_route("/api/v1/cameras/{cam}", methods=["GET", "PUT"])
+    def camera(cam: str):
+        return {"ok": True}
+
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -37,3 +41,17 @@ def test_valid_internal_key_is_exempt_but_wrong_key_is_not(client):
     bad = {"X-Internal-Key": "wrong"}
     codes = [client.post("/api/v1/alerts/dispatch", headers=bad).status_code for _ in range(62)]
     assert codes[-1] == 429
+
+
+def test_other_writes_share_a_general_budget_and_reads_are_free(client):
+    limit = rl.RateLimitMiddleware._WRITE_LIMIT
+    codes = [client.put(f"/api/v1/cameras/{i}").status_code for i in range(limit + 1)]
+    assert codes[:limit] == [200] * limit and codes[-1] == 429
+    assert client.get("/api/v1/cameras/1").status_code == 200
+
+
+def test_idle_buckets_are_dropped(monkeypatch):
+    lim = rl.InMemoryRateLimiter()
+    lim._buckets.update({f"ip{i}": [] for i in range(10_001)})
+    assert lim.check("me", 5, 60)
+    assert list(lim._buckets) == ["me"]

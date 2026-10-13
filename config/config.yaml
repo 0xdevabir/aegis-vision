@@ -25,7 +25,8 @@ weapon_model: "weapon_yolo.pt"
 
 # --- Tracking ---
 tracking:
-  appearance: histogram            # histogram (fast) | cnn (more robust to occlusion, ~100 ms/person on CPU)
+  algorithm: deepsort              # deepsort | bytetrack (motion+IoU, keeps ids through occlusion, no embedding cost)
+  appearance: histogram           # histogram (fast) | cnn (more robust to occlusion, ~100 ms/person on CPU)
 
 # --- Pose (raised arms, fall suspicion) ---
 pose:
@@ -50,7 +51,8 @@ auto_alerts_enabled: true          # Auto-dispatch on criminal (all cameras → 
 
 # --- Behavior Analysis ---
 behavior:
-  speed_threshold: 150             # Pixels/sec to flag as rapid movement
+  speed_threshold_mps: 3.0         # Metres/sec to flag as rapid movement (walking ~1.4, running > 3)
+  loiter_radius_m: 0.6             # Staying within this radius counts as standing still
   loiter_seconds: 15               # Seconds before flagging as loitering
   erratic_angle: 60                # Degrees of direction change to count
 

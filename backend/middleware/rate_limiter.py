@@ -17,6 +17,9 @@ class InMemoryRateLimiter:
     def check(self, key: str, max_requests: int, window_seconds: int) -> bool:
         now = time.time()
         with self._lock:
+            if len(self._buckets) > 10_000:      # drop idle clients so the table cannot grow without bound
+                for k in [k for k, b in self._buckets.items() if not b or b[-1] <= now - 3600]:
+                    del self._buckets[k]
             bucket = self._buckets[key]
             cutoff = now - window_seconds
             bucket[:] = [t for t in bucket if t > cutoff]
@@ -30,7 +33,9 @@ _limiter = InMemoryRateLimiter()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Protect auth + internal event paths under /api/v1."""
+    """Strict limits on auth + internal event paths, a general limit on every other write."""
+
+    _WRITE_LIMIT = 240          # per client per minute, all POST/PUT/PATCH/DELETE under /api/v1
 
     _PROTECTED = (
         "/api/v1/auth/login",
@@ -38,8 +43,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/api/v1/events/internal",
         "/api/v1/alerts/dispatch",
     )
-
-    _INTERNAL = ("/api/v1/events/internal", "/api/v1/alerts/dispatch")
 
     @staticmethod
     def _has_valid_internal_key(request: Request) -> bool:
@@ -53,12 +56,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if any(path.startswith(p) for p in self._PROTECTED):
-            if path.startswith(self._INTERNAL) and self._has_valid_internal_key(request):
+        prefix = next((p for p in self._PROTECTED if path.startswith(p)), None)
+        is_write = request.method in ("POST", "PUT", "PATCH", "DELETE") and path.startswith("/api/v1/")
+        if prefix or is_write:
+            if self._has_valid_internal_key(request):
                 return await call_next(request)
             client_ip = request.client.host if request.client else "unknown"
-            key = f"{client_ip}:{path}"
-            limit = 10 if "login" in path else 60
+            # Keyed on the matched prefix, not the full path: /auth/users/1, /2, ... share one budget.
+            if prefix:
+                key, limit = f"{client_ip}:{prefix}", 10 if "login" in prefix else 60
+            else:
+                key, limit = f"{client_ip}:write", self._WRITE_LIMIT
             if not _limiter.check(key, max_requests=limit, window_seconds=60):
                 # Return (don't raise): exceptions in BaseHTTPMiddleware bypass FastAPI's
                 # handlers and surface as a 500 with a stack trace.

@@ -232,6 +232,7 @@ def run_camera_loop(
                         analytics_snapshot = {
                             "dwell_stats": a.get_dwell_stats(),
                             "traffic_flow": a.get_traffic_flow(),
+                            "heatmap": a.get_heatmap_grid(),
                             "track_count": len(ctx.tracks) if ctx is not None and hasattr(ctx, "tracks") else 0,
                         }
                 except Exception:

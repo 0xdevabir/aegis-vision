@@ -3,7 +3,7 @@
 ## Prerequisites
 - **macOS / Linux**
 - **Python 3.10+**
-- **PostgreSQL** (with pgvector)
+- **PostgreSQL** (optional; SQLite works locally)
 - **Node.js 18+** (for dashboard)
 
 ## Initial Setup

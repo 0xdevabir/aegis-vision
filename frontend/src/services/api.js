@@ -253,10 +253,13 @@ export async function updateUser(userId, patch) {
 }
 
 export async function changePassword(currentPassword, newPassword) {
-  return apiFetch('/auth/change-password', {
+  const res = await apiFetch('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
+  // The server revokes every older token on a password change and returns a fresh one.
+  if (res?.access_token) setToken(res.access_token);
+  return res;
 }
 
 export async function fetchAssignees() {

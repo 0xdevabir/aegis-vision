@@ -31,7 +31,6 @@ aegis/
 │   ├── demo/clips/         # Demo videos
 │   └── results/            # Evaluation output
 ├── scripts/                # Setup, seed, evaluate, deploy
-├── deploy/                 # nginx and deployment configs
 ├── docs/                   # Defense and development guides
 └── tests/unit/             # Pytest suite
 ```

@@ -68,3 +68,31 @@ class TestSuspiciousBehavior:
         is_sus, reasons = is_suspicious_behavior(history, pose_landmarks=None)
         assert isinstance(is_sus, bool)
 
+
+
+class TestMetricThresholds:
+    """With box height in the history, speed and loitering are judged in metres, not pixels."""
+
+    @staticmethod
+    def _walk(px_per_s, height, n=10):
+        return [(float(i), i * px_per_s, 100.0, height) for i in range(n)]
+
+    def test_same_real_speed_gives_same_verdict_near_and_far(self):
+        # 1.4 m/s walk: 280 px/s next to the camera (340 px tall), 35 px/s far away (42.5 px tall)
+        assert is_suspicious_behavior(self._walk(280, 340))[1] == []
+        assert is_suspicious_behavior(self._walk(35, 42.5))[1] == []
+
+    def test_running_is_flagged_even_when_far_and_slow_in_pixels(self):
+        # 5 m/s at 42.5 px tall is only 125 px/s: under the old 150 px/s rule, a miss
+        assert "rapid_movement" in is_suspicious_behavior(self._walk(125, 42.5))[1]
+
+    def test_loitering_radius_scales_with_distance(self):
+        near = [(float(i), 100 + (i % 2) * 60, 100.0, 340) for i in range(21)]     # 0.3 m sway
+        far = [(float(i), 100 + (i % 2) * 40, 100.0, 42.5) for i in range(21)]     # 1.6 m pacing
+        assert "loitering" in is_suspicious_behavior(near)[1]
+        assert "loitering" not in is_suspicious_behavior(far)[1]
+
+    def test_occluded_boxes_do_not_change_the_scale(self):
+        history = self._walk(280, 340)
+        history[3] = history[3][:3] + (60,)                                        # one half-hidden frame
+        assert is_suspicious_behavior(history)[1] == []

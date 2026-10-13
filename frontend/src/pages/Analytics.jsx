@@ -1,8 +1,8 @@
 import { parseTs } from '../lib/time'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, Icons, Empty, Tag } from '../components/ui'
 import { AreaChart, BarList, Donut } from '../components/charts'
-import { fetchCalibrationMetrics } from '../services/api'
+import { fetchCalibrationMetrics, fetchLiveAnalytics } from '../services/api'
 
 function fmtDuration(sec) {
   if (sec == null) return '—'
@@ -11,12 +11,69 @@ function fmtDuration(sec) {
   return `${(sec / 3600).toFixed(1)} h`
 }
 
+// Occupancy grid from the pipeline heartbeat (rows of 0-100), drawn as a blue→red heat overlay.
+function Heatmap({ grid }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas || !grid?.length) return
+    const rows = grid.length, cols = grid[0].length
+    canvas.width = cols
+    canvas.height = rows
+    const g = canvas.getContext('2d')
+    g.clearRect(0, 0, cols, rows)
+    grid.forEach((row, y) => row.forEach((v, x) => {
+      if (!v) return
+      g.fillStyle = `hsla(${240 - 2.4 * v}, 90%, 50%, ${0.25 + 0.0075 * v})`
+      g.fillRect(x, y, 1, 1)
+    }))
+  }, [grid])
+  return (
+    <canvas
+      ref={ref}
+      aria-label="Occupancy heatmap"
+      style={{ width: '100%', aspectRatio: '16 / 9', background: 'var(--bg-2, #0b1220)', borderRadius: 8, filter: 'blur(3px)' }}
+    />
+  )
+}
+
+function LiveCamera({ cam }) {
+  const lines = Object.entries(cam.traffic_flow?.lines || {})
+  const dwell = Object.entries(cam.dwell_stats || {})
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <strong>{cam.camera_id}</strong>
+        <Tag tone="ok">{cam.track_count ?? 0} in view</Tag>
+      </div>
+      <Heatmap grid={cam.heatmap} />
+      <dl className="kv" style={{ marginTop: 10 }}>
+        <dt>People (last {Math.round(cam.traffic_flow?.window_seconds ?? 60)}s)</dt><dd>{cam.traffic_flow?.people ?? 0}</dd>
+        {lines.map(([name, c]) => (
+          <span key={name} style={{ display: 'contents' }}><dt>Line {name}</dt><dd>{c.in} in · {c.out} out</dd></span>
+        ))}
+        {dwell.map(([zone, d]) => (
+          <span key={zone} style={{ display: 'contents' }}><dt>Dwell {zone}</dt><dd>{d.count} · avg {fmtDuration(d.avg_duration)}</dd></span>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
 export function Analytics({ ctx }) {
   const { summary, trends, locations, events } = ctx
   const [cal, setCal] = useState(null)
+  const [live, setLive] = useState({})
 
   useEffect(() => {
     fetchCalibrationMetrics(168).then(setCal).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const load = () => fetchLiveAnalytics().then((d) => setLive(d || {})).catch(() => {})
+    load()
+    const id = setInterval(load, 5000)
+    return () => clearInterval(id)
   }, [])
 
   const trendData = trends.map((t) => t.events)
@@ -82,6 +139,15 @@ export function Analytics({ ctx }) {
           <BarList items={locations.map((l) => ({ label: l.location || 'Unknown', value: l.events }))} color="var(--cyan)" />
         </Card>
       </div>
+
+      <Card title="Live Occupancy" sub="where people stand · line crossings · dwell (per camera)">
+        {Object.keys(live).length ? (
+          <div className="grid grid-2">
+            {Object.values(live).map((cam) => <LiveCamera key={cam.camera_id} cam={cam} />)}
+          </div>
+        ) : <Empty icon={Icons.chart}>No live analytics yet — start the pipeline</Empty>}
+      </Card>
+      <div style={{ height: 14 }} />
 
       <Card title="Model Calibration" sub="ground-truth labels · confusion matrix">
         {!cal && <Empty icon={Icons.chart}>Loading calibration metrics…</Empty>}

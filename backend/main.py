@@ -170,7 +170,10 @@ def health_check():
     try:
         from backend.services.ha import redis_health
         rh = redis_health()
-        checks["redis"] = rh.get("status", "unknown")
+        # Redis is optional: without REDIS_URL the backend runs single-node, which is healthy.
+        checks["redis"] = "ok" if rh["connected"] else ("down" if rh["enabled"] else "disabled")
+        if checks["redis"] == "down":
+            status = "degraded"
     except Exception as e:
         checks["redis"] = str(e)
     try:

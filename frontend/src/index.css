@@ -997,7 +997,7 @@ button, input, select, textarea { font: inherit; }
   background: var(--surface-2); color: var(--text); font-size: 0.92rem; outline: none;
 }
 .login-card input:focus { border-color: var(--primary); box-shadow: var(--ring); }
-.login-card .btn-primary { padding: 12px; font-size: 0.92rem; justify-content: center; }
+.login-card .btn-primary, .login-demo-btn { padding: 12px; font-size: 0.92rem; justify-content: center; }
 .login-error { color: var(--danger); font-size: 0.84rem; background: var(--danger-soft); padding: 10px 12px; border-radius: 12px; }
 .login-hint { font-size: 0.74rem; color: var(--text-3); margin: 0; }
 .login-hint code { background: var(--surface-2); padding: 2px 6px; border-radius: 6px; font-family: var(--font-mono); }

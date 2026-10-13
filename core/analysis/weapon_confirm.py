@@ -11,7 +11,7 @@ from typing import Iterable, Optional
 UNASSIGNED = -1
 
 
-def _overlap_ratio(weapon_bbox, person_bbox) -> float:
+def overlap_ratio(weapon_bbox, person_bbox) -> float:
     """Fraction of the weapon box that lies inside the person box."""
     wx1, wy1, wx2, wy2 = weapon_bbox
     px1, py1, px2, py2 = person_bbox
@@ -33,7 +33,7 @@ def associate(weapon_detections: Iterable[dict], tracks, min_overlap: float = 0.
         best_id: Optional[int] = None
         best = min_overlap
         for tid, pb in boxes.items():
-            r = _overlap_ratio(w["bbox"], pb)
+            r = overlap_ratio(w["bbox"], pb)
             if r >= best:
                 best, best_id = r, tid
         key = UNASSIGNED if best_id is None else best_id

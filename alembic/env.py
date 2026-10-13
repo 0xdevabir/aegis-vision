@@ -7,7 +7,7 @@ from backend.db.database import Base
 # Import every model so autogenerate sees the full schema.
 from backend.models import (  # noqa: F401
     user, face_encoding, evidence, audit_log, known_person, person_image,
-    camera, alert, vehicle, config_entry, incident, custody, recording, calibration, event,
+    camera, alert, vehicle, config_entry, incident, custody, recording, calibration, event, camera_officer,
 )
 
 config = context.config

@@ -33,19 +33,19 @@ Aegis combines a modular CV pipeline, a FastAPI backend, and a React dashboard i
 |------------|-------------|
 | **Human detection** | YOLOv8 person detection with configurable confidence |
 | **Weapon detection** | Custom YOLO model for firearm / weapon identification |
-| **Vehicle detection** | Vehicle tracking with ANPR (license plate OCR) |
-| **Face recognition** | Watchlist matching via PostgreSQL + pgvector (SQLite fallback for local demos) |
-| **Behavior analysis** | Loitering, rapid movement, erratic motion, pose estimation |
+| **Vehicle detection** | Vehicle tracking with opt-in ANPR (plate OCR, confirmed by multi-read voting per vehicle) |
+| **Face recognition** | Watchlist matching against face encodings stored in PostgreSQL (SQLite for local demos) |
+| **Behavior analysis** | Loitering, rapid movement, erratic motion (judged in metres, scaled by person height), pose estimation |
 | **Anomaly detection** | Zone-based crowd and dwell-time anomalies |
-| **Analytics** | Heatmaps, dwell time, and traffic-flow metrics |
+| **Analytics** | Per-camera occupancy heatmap, dwell time, and line-crossing in/out counts |
 
 ### Alerting & Security
 
 - Automated watchlist alerts across sound, DB, audit, WebSocket, and webhooks
 - GPS coordinates and Google Maps link on every critical alert
-- Throttled evidence snapshots (optional AES-256 encryption)
+- Throttled evidence snapshots (optional AES-256-GCM encryption)
 - Full audit trail for evidence saves and auth events
-- Optional Slack / Discord / custom webhook dispatch
+- Optional Slack / Discord / custom webhook dispatch, HMAC-signed when `WEBHOOK_SIGNING_SECRET` is set
 
 ### Operator Dashboard
 
@@ -106,10 +106,10 @@ Stages live under `core/pipeline/stages/` and share a `FrameContext`, so each st
 
 | Layer | Technologies |
 |-------|--------------|
-| **Computer Vision** | OpenCV, YOLOv8 + YOLOv8-pose (Ultralytics), face_recognition, EasyOCR, Deep SORT |
-| **Backend** | FastAPI, SQLAlchemy, PostgreSQL + pgvector, JWT, AES-256 |
+| **Computer Vision** | OpenCV, YOLOv8 + YOLOv8-pose (Ultralytics), face_recognition, EasyOCR, Deep SORT or ByteTrack |
+| **Backend** | FastAPI, SQLAlchemy, PostgreSQL, JWT, AES-256-GCM |
 | **Frontend** | React 19, Vite 8 |
-| **Infrastructure** | Docker Compose, Redis (optional), nginx deploy config |
+| **Infrastructure** | Docker Compose, Redis (optional), nginx (`frontend/nginx.conf`) |
 | **Testing** | pytest, GitHub Actions CI |
 
 ---
@@ -120,7 +120,7 @@ Stages live under `core/pipeline/stages/` and share a `FrameContext`, so each st
 |-------------|-----------------|
 | Python | 3.10+ |
 | Node.js | 18+ |
-| PostgreSQL | 14+ with `pgvector` (optional — SQLite works for local demos) |
+| PostgreSQL | 14+ (optional — SQLite works for local demos) |
 | Model weights | Place under `models/` (see below) |
 
 **Model weights** (not shipped in the repo):
@@ -329,7 +329,9 @@ Copy from `.env.example`. Minimum variables:
 | `DATABASE_URL` | PostgreSQL or SQLite connection string |
 | `USE_SQLITE` | `true` for local zero-setup demos |
 | `SECRET_KEY` | JWT signing key (64+ chars in production) |
-| `ENCRYPTION_KEY` | AES-256 evidence encryption |
+| `ENCRYPTION_KEY`, `ENCRYPTION_SALT` | AES-256-GCM evidence encryption (both required, no built-in default) |
+| `METRICS_TOKEN` | Bearer token for Prometheus to scrape `/api/v1/metrics` (otherwise admin login only) |
+| `WEBHOOK_SIGNING_SECRET` | Signs outbound webhooks: `X-Aegis-Signature: sha256=HMAC(secret, "<X-Aegis-Timestamp>.<body>")` |
 | `INTERNAL_API_KEY` | Pipeline ↔ backend auth (**must match both sides**) |
 | `BACKEND_URL` | Backend URL for pipeline event publishing |
 | `RTSP_*` | IP camera stream URLs |
@@ -403,7 +405,6 @@ Register display names under `criminal_names` in `config/config.yaml`.
 │
 ├── config/                     # YAML configuration
 ├── scripts/                    # Setup, seed, evaluate, deploy
-├── deploy/                     # nginx configuration
 ├── docs/                       # Architecture, defense, development
 └── tests/unit/                 # pytest suite
 ```

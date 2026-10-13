@@ -104,3 +104,28 @@ def test_refresh_issues_a_working_new_token_and_rejects_expired():
     db.close()
     expired = create_access_token({"user_id": uid, "role": "operator"}, timedelta(seconds=-5))
     assert client.post(f"{API}/refresh", headers={"Authorization": f"Bearer {expired}"}).status_code == 401
+
+
+def test_tokens_are_revoked_by_password_change_role_change_and_logout_all():
+    def me(token):
+        return client.get(f"{API}/me", headers={"Authorization": f"Bearer {token}"}).status_code
+
+    stolen = _login("ah_op", "OperPass1234").json()["access_token"]
+    mine = _login("ah_op", "OperPass1234").json()["access_token"]
+    r = client.post(f"{API}/change-password", headers={"Authorization": f"Bearer {mine}"},
+                    json={"current_password": "OperPass1234", "new_password": "BrandNew12345"})
+    fresh = r.json()["access_token"]
+    assert (me(stolen), me(mine), me(fresh)) == (401, 401, 200)       # old tokens die, this session continues
+
+    admin = _h("ah_admin", "AdminPass123")
+    uid = client.get(f"{API}/me", headers={"Authorization": f"Bearer {fresh}"}).json()["id"]
+    assert client.patch(f"{API}/users/{uid}", headers=admin, json={"phone": "+8801700000000"}).status_code == 200
+    assert me(fresh) == 200                                             # unrelated edits keep the session
+    assert client.patch(f"{API}/users/{uid}", headers=admin, json={"role": "viewer"}).status_code == 200
+    assert me(fresh) == 401                                             # old role claim no longer usable
+
+    again = _login("ah_op", "BrandNew12345").json()["access_token"]
+    assert client.post(f"{API}/logout-all", headers={"Authorization": f"Bearer {again}"}).status_code == 200
+    assert me(again) == 401
+    media = client.get("/api/v1/stream/cameras", params={"token": again})
+    assert media.status_code == 401                                     # query-param media tokens too

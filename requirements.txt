@@ -6,6 +6,7 @@ face-recognition==1.3.0
 # face_recognition calls quit() at import and takes the whole process down.
 setuptools<81
 deep-sort-realtime==1.3.2
+lap>=0.5.12                      # solver for the optional ByteTrack tracker (tracking.algorithm)
 numpy==2.0.2
 
 # Backend / security

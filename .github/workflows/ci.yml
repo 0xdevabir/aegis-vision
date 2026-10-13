@@ -32,8 +32,8 @@ jobs:
           ENCRYPTION_SALT: ci-salt-value
           INTERNAL_API_KEY: ci-internal-key-not-default
           USE_SQLITE: "true"
-        # Gate set just below the current 48%; raise it as coverage grows.
-        run: pytest tests/ --tb=short --cov=backend --cov=core --cov=utils --cov-fail-under=45
+        # Gate set just below the current 62%; raise it as coverage grows.
+        run: pytest tests/ --tb=short --cov=backend --cov=core --cov=utils --cov-fail-under=58
 
   migrations:
     runs-on: ubuntu-latest

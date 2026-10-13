@@ -49,3 +49,21 @@ def test_login_and_me():
 def test_config_thresholds_requires_auth():
     r = client.get("/api/v1/config/thresholds/all")
     assert r.status_code == 401
+
+
+def test_health_reports_redis_state():
+    assert client.get("/health").json()["checks"]["redis"] in ("ok", "down", "disabled")
+
+
+def test_metrics_requires_token_or_admin(monkeypatch):
+    assert client.get("/api/v1/metrics").status_code == 401
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-token")
+    assert client.get("/api/v1/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 401
+
+    from backend.api.system_routes import _pipeline_status
+    monkeypatch.setitem(_pipeline_status, "cameras", {'gate"1': {"fps": 7.5, "threat_score": 2, "last_seen": None}})
+    r = client.get("/api/v1/metrics", headers={"Authorization": "Bearer scrape-token"})
+    assert r.status_code == 200
+    assert 'aegis_camera_fps{camera="gate\\"1"} 7.500' in r.text
+    assert "aegis_camera_heartbeat_age_seconds{" not in r.text
+    assert "# TYPE aegis_alerts gauge" in r.text

@@ -129,7 +129,7 @@ export function EvidencePage({ ctx }) {
               <img
                 src={evidenceImageUrl(selected.id, 'frame')}
                 alt="Evidence frame"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#05070b' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'var(--media)' }}
                 onError={(e) => { e.target.style.display = 'none' }}
               />
             ) : (selected.is_criminal ? '🎭' : selected.weapon_present ? '🔫' : '📷')}

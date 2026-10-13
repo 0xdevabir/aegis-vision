@@ -126,7 +126,7 @@ export function Card({ title, sub, actions, children, className = '', flush = fa
     <div className={`card ${className}`} style={style}>
       {(title || actions) && (
         <div className="card-head">
-          <span>{title} {sub && <span className="sub">· {sub}</span>}</span>
+          <span className="card-title">{title}{sub && <span className="sub">{sub}</span>}</span>
           {actions}
         </div>
       )}

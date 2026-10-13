@@ -52,7 +52,7 @@ function answer(q, ctx) {
     if (crit.length) {
       const a = crit[0]
       return `Recommended response for “${a.msg}” at ${a.camera || 'unknown location'}: ` +
-        `1) Verify the detection snapshot in Evidence Center. 2) Dispatch the nearest unit` +
+        `1) Verify the detection snapshot in Evidence. 2) Dispatch the nearest unit` +
         (a.lat != null ? ` to GPS ${Number(a.lat).toFixed(5)}, ${Number(a.lng).toFixed(5)}` : '') +
         `. 3) Lock adjacent cameras onto the subject via Live Monitoring. 4) Open an incident ticket and attach the evidence.`
     }
@@ -105,7 +105,7 @@ export function Copilot({ ctx, onClose }) {
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-head">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icons.bot /> Command Assistant</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icons.bot /> Assistant</span>
           <button className="icon-btn" onClick={onClose}><Icons.close /></button>
         </div>
         <div className="drawer-body" ref={bodyRef}>

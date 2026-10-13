@@ -161,20 +161,13 @@ export function ZoneEditor({ ctx }) {
 
   if (!cameras.length) {
     return (
-      <>
-        <div className="page-head"><div><h2>Zones &amp; Lines</h2></div></div>
-        <Card><p className="muted">No cameras yet. Add one under Camera Management first.</p></Card>
-      </>
+      <Card><p className="muted">No cameras yet. Add one under Cameras first.</p></Card>
     )
   }
 
   return (
     <>
       <div className="page-head">
-        <div>
-          <h2>Zones &amp; Lines</h2>
-          <p>Draw restricted areas and counting lines over the camera view.</p>
-        </div>
         <div className="head-actions">
           <label className="field inline">
             <span className="sr-only">Camera</span>

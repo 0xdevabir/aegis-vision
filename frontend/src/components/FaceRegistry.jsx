@@ -332,7 +332,7 @@ function EvidenceRow({ ev, result, busy, onCheck }) {
   return (
     <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
       <img src={evidenceImageUrl(ev.id, ev.has_image ? 'roi' : 'frame')} alt={`evidence ${ev.id}`}
-        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, background: '#020617' }} />
+        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 12, background: 'var(--media)' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <b>#{ev.id} · {ev.category}</b>
         <div className="meta">{ev.camera_location} · {timeAgo(ev.timestamp)}</div>

@@ -28,18 +28,18 @@ export function Watchlist({ ctx }) {
   return (
     <>
       <div className="grid grid-3" style={{ marginBottom: 14 }}>
-        <div className="stat accent-danger"><span className="label">Watchlisted Persons</span><span className="value">{knownPersons.length}</span></div>
-        <div className="stat accent-warn"><span className="label">Wanted / Suspects</span><span className="value">{knownPersons.filter((p) => ['wanted', 'suspect'].includes(p.criminal_status)).length}</span></div>
-        <div className="stat accent-primary"><span className="label">Cross-camera tracks</span><span className="value">{reid.filter((t) => t.cross_camera).length}</span></div>
+        <div className="stat accent-danger"><span className="label">People on the watchlist</span><span className="value">{knownPersons.length}</span></div>
+        <div className="stat accent-warn"><span className="label">Wanted or suspect</span><span className="value">{knownPersons.filter((p) => ['wanted', 'suspect'].includes(p.criminal_status)).length}</span></div>
+        <div className="stat accent-primary"><span className="label">Seen on more than one camera</span><span className="value">{reid.filter((t) => t.cross_camera).length}</span></div>
       </div>
 
-      <Card title="Face records" sub="enroll, verify and manage faces in the Face Registry"
-        actions={<button className="btn btn-primary btn-sm" onClick={() => setPage('faces')}>Open Face Registry</button>}>
+      <Card title="Face records" sub="Add, check and manage faces on the Faces page"
+        actions={<button className="btn btn-primary btn-sm" onClick={() => setPage('faces')}>Open Faces</button>}>
         <div className="meta">{knownPersons.length} record(s) · matched live by every camera</div>
       </Card>
 
       {knownPersons.length === 0 ? (
-        <Card><Empty icon={Icons.watchlist}>No face records yet. Add one in the Face Registry.</Empty></Card>
+        <Card><Empty icon={Icons.watchlist}>No face records yet. Add one on the Faces page.</Empty></Card>
       ) : (
         <div className="grid grid-3" style={{ marginBottom: 14 }}>
           {knownPersons.map((p) => {
@@ -52,7 +52,7 @@ export function Watchlist({ ctx }) {
                     <img src={personImageUrl(p.first_image_id)} alt={p.name}
                       style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
-                    <div className="avatar" style={{ width: 52, height: 52, fontSize: '1.2rem', background: 'linear-gradient(135deg,#3b82f6,#7c3aed)' }}>
+                    <div className="avatar" style={{ width: 52, height: 52, fontSize: '1.2rem' }}>
                       {p.name?.[0]?.toUpperCase() || '?'}
                     </div>
                   )}

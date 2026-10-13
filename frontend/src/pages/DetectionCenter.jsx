@@ -48,10 +48,6 @@ export function DetectionCenter({ ctx }) {
   return (
     <>
       <div className="page-head">
-        <div>
-          <h2>Detection Center</h2>
-          <p>Every recorded detection, searchable by type, camera and time.</p>
-        </div>
         <div className="head-actions">
           <label className="field inline">
             <span className="sr-only">Camera</span>

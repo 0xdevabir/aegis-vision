@@ -35,45 +35,48 @@ import { Users } from './pages/Users'
 import { Settings } from './pages/Settings'
 import { ZoneEditor } from './pages/ZoneEditor'
 
+// Names are what an operator would call the page; `desc` is the one line shown under its title.
 const NAV = [
   {
-    group: 'Operations',
+    group: 'Watch',
     pages: [
-      { id: 'overview', label: 'Executive Overview', icon: Icons.overview },
-      { id: 'live', label: 'Live Monitoring', icon: Icons.live },
-      { id: 'map', label: 'GIS Map', icon: Icons.map },
-      { id: 'detection', label: 'AI Detection Center', icon: Icons.ai },
+      { id: 'overview', label: 'Home', desc: 'What needs you right now, and how the system is doing.', icon: Icons.overview },
+      { id: 'live', label: 'Live cameras', desc: 'Watch every camera as it happens.', icon: Icons.live },
+      { id: 'map', label: 'Map', desc: 'Where your cameras are and where alerts came from.', icon: Icons.map },
     ],
   },
   {
-    group: 'Response',
+    group: 'Respond',
     pages: [
-      { id: 'alerts', label: 'Alert Triage', icon: Icons.alert },
-      { id: 'incidents', label: 'Incidents', icon: Icons.incident },
-      { id: 'evidence', label: 'Evidence Center', icon: Icons.evidence },
+      { id: 'alerts', label: 'Alerts', desc: 'Go through alerts one at a time and decide what happens next.', icon: Icons.alert },
+      { id: 'incidents', label: 'Incidents', desc: 'Cases opened from alerts, and where each one stands.', icon: Icons.incident },
+      { id: 'evidence', label: 'Evidence', desc: 'Snapshots and clips saved from detections.', icon: Icons.evidence },
     ],
   },
   {
-    group: 'Intelligence',
+    group: 'Investigate',
     pages: [
-      { id: 'faces', label: 'Face Registry', icon: Icons.users },
-      { id: 'watchlist', label: 'Watchlist', icon: Icons.watchlist },
-      { id: 'vehicles', label: 'Vehicle Intelligence', icon: Icons.vehicle },
-      { id: 'analytics', label: 'Analytics', icon: Icons.chart },
-      { id: 'reports', label: 'Reports', icon: Icons.report },
+      { id: 'detection', label: 'Detection history', desc: 'Everything the cameras have detected, newest first.', icon: Icons.ai },
+      { id: 'faces', label: 'Faces', desc: 'People the system can recognise.', icon: Icons.users },
+      { id: 'watchlist', label: 'Watchlist', desc: 'People who raise an alert when a camera sees them.', icon: Icons.watchlist },
+      { id: 'vehicles', label: 'Vehicles', desc: 'Number plates read by the cameras.', icon: Icons.vehicle },
+      { id: 'analytics', label: 'Analytics', desc: 'Trends in detections over time and by place.', icon: Icons.chart },
+      { id: 'reports', label: 'Reports', desc: 'Summaries you can print or export.', icon: Icons.report },
     ],
   },
   {
-    group: 'Administration',
+    group: 'Set up',
     pages: [
-      { id: 'cameras', label: 'Camera Management', icon: Icons.camera },
-      { id: 'zones', label: 'Zones & Lines', icon: Icons.zone },
-      { id: 'users', label: 'Users & Roles', icon: Icons.users },
-      { id: 'settings', label: 'Settings', icon: Icons.settings },
+      { id: 'cameras', label: 'Cameras', desc: 'Add cameras and check that each one is streaming.', icon: Icons.camera },
+      { id: 'zones', label: 'Zones', desc: 'Draw the areas and lines each camera should watch.', icon: Icons.zone },
+      { id: 'users', label: 'Users', desc: 'Who can sign in and what they are allowed to do.', icon: Icons.users },
+      { id: 'settings', label: 'Settings', desc: 'Detection, notification and system options.', icon: Icons.settings },
     ],
   },
 ]
 const ALL_PAGES = NAV.flatMap((g) => g.pages)
+// Phone tab bar: the pages used every shift. Everything else is behind "More".
+const TAB_PAGES = ['overview', 'live', 'alerts', 'map'].map((id) => ALL_PAGES.find((p) => p.id === id))
 
 function filterNavByRole(role) {
   // While the profile loads (role unknown) show no navigation instead of flashing the admin menu.
@@ -164,14 +167,15 @@ function LoginForm({ onLogin, theme, setTheme, notice }) {
         {theme === 'dark' ? <Icons.sun /> : <Icons.moon />}
       </button>
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1><span className="brand-logo">AG</span> Aegis Command Center</h1>
-        <p className="login-sub">AI Smart Surveillance · threat detection · GPS dispatch</p>
+        <span className="brand-logo"><Icons.shield /></span>
+        <h1>Sign in to Aegis</h1>
+        <p className="login-sub">Your cameras, alerts and evidence in one place.</p>
         {error && <div className="login-error" role="alert">{error}</div>}
         <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required /></label>
         <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>
         <button type="submit" className="btn btn-primary" disabled={loading || !username || !password}>{loading ? 'Signing in…' : 'Sign in'}</button>
         {DEMO_LOGIN && (
-          <button type="button" className="btn login-demo-btn" disabled={loading} onClick={() => signIn(DEMO_LOGIN.username, DEMO_LOGIN.password)}>Demo login</button>
+          <button type="button" className="btn login-demo-btn" disabled={loading} onClick={() => signIn(DEMO_LOGIN.username, DEMO_LOGIN.password)}>Use the demo account</button>
         )}
       </form>
     </div>
@@ -183,8 +187,10 @@ function App() {
   const [authed, setAuthed] = useState(!!getToken())
   const [sessionNotice, setSessionNotice] = useState('')
   const [page, setPageState] = useState(pageFromHash())
+  const [scrolled, setScrolled] = useState(false)   // the large page title has scrolled under the top bar
   const setPage = (id) => {
     setPageState(id)
+    setScrolled(false)
     window.history.pushState(null, '', `#/${id}`)
   }
   const [theme, setThemeState] = useState(() => {
@@ -237,7 +243,7 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    const onHash = () => setPageState(pageFromHash())
+    const onHash = () => { setPageState(pageFromHash()); setScrolled(false) }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -362,7 +368,7 @@ function App() {
       } else if (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey) {
         setShowCopilot((v) => !v)
       } else if (e.key === 'Escape') {
-        setShowPalette(false); setShowNotifs(false); setShowCopilot(false)
+        setShowPalette(false); setShowNotifs(false); setShowCopilot(false); setSidebarOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -427,8 +433,8 @@ function App() {
   const pipelineOnline = systemStatus?.online
   const activePage = ALL_PAGES.find((p) => p.id === page)
   const PageComponent = PAGE_COMPONENTS[page] || Overview
-
-
+  const alertCount = reviewPending || criticalEvents.length
+  const allowed = !me || canViewPage(me.role, page)
 
   const ctx = {
     events, setEvents, systemStatus, threatLevel, wsConnected,
@@ -439,8 +445,6 @@ function App() {
     reviewPending, refreshReviewCount,
     theme, setTheme,
   }
-
-
 
   return (
     <div className={`shell ${threatLevel === 'critical' ? 'threat-critical' : ''}`}>
@@ -456,10 +460,11 @@ function App() {
           ))}
         </div>
       )}
+      {sidebarOpen && <button type="button" className="sidebar-scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
-          <span className="brand-logo">AG</span>
-          <div>Aegis<small>COMMAND CENTER</small></div>
+          <span className="brand-logo"><Icons.shield /></span>
+          <div>Aegis<small>Security cameras</small></div>
         </div>
         <div className="nav-scroll">
           {filterNavByRole(me?.role).map((group) => (
@@ -478,10 +483,8 @@ function App() {
                   >
                     <Icon />
                     {p.label}
-                    {p.id === 'alerts' && (reviewPending > 0 || criticalEvents.length > 0) && (
-                      <span className="nav-badge" aria-label={`${reviewPending || criticalEvents.length} need attention`}>
-                        {reviewPending || criticalEvents.length}
-                      </span>
+                    {p.id === 'alerts' && alertCount > 0 && (
+                      <span className="nav-badge" aria-label={`${alertCount} need attention`}>{alertCount}</span>
                     )}
                   </button>
                 )
@@ -504,40 +507,31 @@ function App() {
       </aside>
 
       <main className="main">
-
-
-        <header className="topbar">
-          <button type="button" className="icon-btn hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menu">
-            <Icons.menu />
-          </button>
-          <div className="topbar-title">
-            <span className="crumb">Command Center</span>
-            <h1>{activePage?.label}</h1>
-          </div>
+        <header className={`topbar ${scrolled ? 'scrolled' : ''}`}>
+          <span className="topbar-compact" aria-hidden="true">{activePage?.label}</span>
           <button
             type="button"
             className="searchbox"
             onClick={() => setShowPalette(true)}
-            aria-label="Open command palette"
+            aria-label="Search pages and actions"
           >
             <Icons.search />
-            <span>Search pages and actions…</span>
+            <span>Search</span>
             <kbd>⌘K</kbd>
           </button>
           <div className="topbar-right">
             <div className="status-rail" aria-label="System status">
-
-              <Pill tone={pipelineOnline ? 'ok' : 'warn'}>{pipelineOnline ? 'AI online' : 'AI offline'}</Pill>
+              <Pill tone={pipelineOnline ? 'ok' : 'warn'}>{pipelineOnline ? 'Detection on' : 'Detection off'}</Pill>
               <Pill tone={wsConnected && statusWsConnected ? 'ok' : 'danger'}>
-                {wsConnected && statusWsConnected ? 'Live updates' : 'Reconnecting…'}
+                {wsConnected && statusWsConnected ? 'Live' : 'Reconnecting…'}
               </Pill>
             </div>
             <div className="topbar-actions">
-              <button type="button" className="icon-btn" title="Command Assistant" aria-label="Command Assistant" onClick={() => setShowCopilot(true)}><Icons.bot /></button>
+              <button type="button" className="icon-btn" title="Ask the assistant" aria-label="Ask the assistant" onClick={() => setShowCopilot(true)}><Icons.bot /></button>
               <button type="button" className="icon-btn" title="Notifications" aria-label="Notifications" onClick={() => setShowNotifs(true)} style={{ position: 'relative' }}>
                 <Icons.bell />
                 {criticalEvents.length > 0 && (
-                  <span className="nav-badge" style={{ position: 'absolute', top: 2, right: 2 }}>{criticalEvents.length}</span>
+                  <span className="nav-badge" style={{ position: 'absolute', top: 0, right: 0 }}>{criticalEvents.length}</span>
                 )}
               </button>
               <button
@@ -553,26 +547,57 @@ function App() {
           </div>
         </header>
 
-        {(apiDown || loadFailed.length > 0) && (
-          <div className="conn-banner" role="status">
-            <span>
-              {apiDown
-                ? 'Cannot reach the backend. Showing the last data received; retrying automatically.'
-                : `Some data could not be loaded (${loadFailed.join(', ')}).`}
-            </span>
-            <button className="btn btn-sm" onClick={() => { setLoadFailed([]); setReloadTick((t) => t + 1) }}>Retry now</button>
-          </div>
-        )}
-
-        <div className="page">
-          {me && !canViewPage(me.role, page) ? (
-            <Card title="Access restricted" sub={`The ${me.role} role cannot open this page`}>
-              <Empty icon={Icons.shield}>Ask an administrator if you need access.</Empty>
-            </Card>
-          ) : (
-            <PageComponent ctx={ctx} />
+        <div className="page" key={page} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 48)}>
+          {(apiDown || loadFailed.length > 0) && (
+            <div className="conn-banner" role="status">
+              <span>
+                {apiDown
+                  ? 'Cannot reach the server. Showing the last data received and retrying.'
+                  : `Some data could not be loaded (${loadFailed.join(', ')}).`}
+              </span>
+              <button className="btn btn-sm" onClick={() => { setLoadFailed([]); setReloadTick((t) => t + 1) }}>Retry now</button>
+            </div>
           )}
+          <div className="page-view">
+            {allowed ? (
+              <>
+                <div className="page-title">
+                  <h1>{activePage?.label}</h1>
+                  <p>{activePage?.desc}</p>
+                </div>
+                <PageComponent ctx={ctx} />
+              </>
+            ) : (
+              <Card title="You don't have access to this page" sub={`The ${me.role} role cannot open it`}>
+                <Empty icon={Icons.shield}>Ask an administrator if you need access.</Empty>
+              </Card>
+            )}
+          </div>
         </div>
+
+        <nav className="tabbar" aria-label="Main">
+          {TAB_PAGES.filter((p) => canViewPage(me?.role, p.id)).map((p) => {
+            const Icon = p.icon
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className={`tab ${page === p.id ? 'active' : ''}`}
+                aria-current={page === p.id ? 'page' : undefined}
+                data-alert-nav={p.id === 'alerts' && criticalEvents.length > 0 ? 'true' : undefined}
+                onClick={() => setPage(p.id)}
+              >
+                <Icon />
+                {p.label.split(' ')[0]}
+                {p.id === 'alerts' && alertCount > 0 && <span className="nav-badge">{alertCount}</span>}
+              </button>
+            )
+          })}
+          <button type="button" className={`tab ${sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(true)}>
+            <Icons.menu />
+            More
+          </button>
+        </nav>
       </main>
 
       {showPalette && (
@@ -580,8 +605,8 @@ function App() {
           pages={ALL_PAGES.filter((p) => canViewPage(me?.role, p.id))}
           actions={[
             { id: 'act-theme', label: `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`, icon: theme === 'dark' ? Icons.sun : Icons.moon, hint: 'Action', run: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
-            { id: 'act-copilot', label: 'Open Command Assistant', icon: Icons.bot, hint: 'Action', run: () => setShowCopilot(true) },
-            { id: 'act-notifs', label: 'Open Notification Center', icon: Icons.bell, hint: 'Action', run: () => setShowNotifs(true) },
+            { id: 'act-copilot', label: 'Ask the assistant', icon: Icons.bot, hint: 'Action', run: () => setShowCopilot(true) },
+            { id: 'act-notifs', label: 'Open notifications', icon: Icons.bell, hint: 'Action', run: () => setShowNotifs(true) },
             { id: 'act-profile', label: 'Change my password', icon: Icons.users, hint: 'Action', run: () => setShowProfile(true) },
             { id: 'act-logout', label: 'Sign out', icon: Icons.logout, hint: 'Action', run: () => { clearToken(); setAuthed(false) } },
           ]}

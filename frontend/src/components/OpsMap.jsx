@@ -5,7 +5,7 @@ import { fovPolygon } from '../lib/mapGeo'
 
 // Self-hosted tiles can be set at build time: VITE_MAP_TILES=https://tiles.example/{z}/{x}/{y}.png
 const TILE_URL = import.meta.env.VITE_MAP_TILES || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: '#3b82f6' }
+const SEV_COLOR = { critical: '#e5534b', high: '#f0935a', medium: '#d9a531', low: '#7d9475', info: '#7d9475' }
 
 const camIcon = (status, selected) => L.divIcon({
   className: '',

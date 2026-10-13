@@ -6,7 +6,7 @@ export function NotificationDrawer({ events, onClose, onClear }) {
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-head">
-          <span>Notification Center</span>
+          <span>Notifications</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn btn-sm btn-ghost" onClick={onClear}>Clear all</button>
             <button className="icon-btn" onClick={onClose}><Icons.close /></button>

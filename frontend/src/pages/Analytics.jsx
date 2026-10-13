@@ -32,7 +32,7 @@ function Heatmap({ grid }) {
     <canvas
       ref={ref}
       aria-label="Occupancy heatmap"
-      style={{ width: '100%', aspectRatio: '16 / 9', background: 'var(--bg-2, #0b1220)', borderRadius: 8, filter: 'blur(3px)' }}
+      style={{ width: '100%', aspectRatio: '16 / 9', background: 'var(--media)', borderRadius: 12, filter: 'blur(3px)' }}
     />
   )
 }
@@ -163,7 +163,7 @@ export function Analytics({ ctx }) {
                 <dt>Dismiss rate</dt><dd>{cal.proxy?.dismiss_rate != null ? `${(cal.proxy.dismiss_rate * 100).toFixed(1)}%` : '—'}</dd>
               </dl>
               <p className="muted" style={{ fontSize: '0.76rem', marginTop: 10 }}>
-                Mark evidence as False Positive in Evidence Center, or run{' '}
+                Mark evidence as False Positive in Evidence, or run{' '}
                 <code className="mono">python scripts/evaluate_pipeline.py --output data/results/eval.json</code>
               </p>
             </div>

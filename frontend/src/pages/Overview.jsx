@@ -46,17 +46,6 @@ export function Overview({ ctx }) {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h2>Executive Overview</h2>
-          <p>Live posture across cameras, AI pipeline, and response channels.</p>
-        </div>
-        <div className="head-actions">
-          <Pill tone={ctx.wsConnected ? 'ok' : 'danger'}>{ctx.wsConnected ? 'Realtime linked' : 'Link down'}</Pill>
-          <Pill tone={systemStatus?.online ? 'info' : 'muted'}>{systemStatus?.online ? 'Pipeline online' : 'Pipeline standby'}</Pill>
-        </div>
-      </div>
-
       <section className={`attention ${attention.length ? '' : 'clear'}`} aria-label="Needs attention">
         <h3>{attention.length ? 'Needs attention' : 'All clear'}</h3>
         {attention.length === 0 && <p className="muted">No pending reviews, offline cameras or missing models.</p>}
@@ -68,32 +57,32 @@ export function Overview({ ctx }) {
         ))}
       </section>
 
-      <div className="section-label"><span>Operational KPIs</span></div>
-      <div className="grid grid-4" style={{ marginBottom: 18 }}>
+      <div className="section-label"><span>Right now</span></div>
+      <div className="grid grid-4" style={{ marginBottom: 24 }}>
         <Stat
-          label={systemStatus?.online ? 'Active Cameras' : 'Configured Cameras'}
+          label={systemStatus?.online ? 'Cameras streaming' : 'Cameras set up'}
           value={`${systemStatus?.online ? (liveCams.length || activeCameras) : cameras.length}`}
-          delta={systemStatus?.online ? `${offlineCameras} offline` : 'none streaming — pipeline offline'}
+          delta={systemStatus?.online ? `${offlineCameras} offline` : 'None streaming while detection is off'}
           accent="primary" icon={Icons.camera}
         />
-        <Stat label="AI Pipeline" value={systemStatus?.online ? 'ONLINE' : 'OFFLINE'} delta={systemStatus?.online ? `${liveCams.length} camera${liveCams.length === 1 ? '' : 's'} reporting` : 'Start the pipeline'} accent={systemStatus?.online ? 'ok' : 'warn'} icon={Icons.ai} />
-        <Stat label="Active Alerts" value={criticalEvents.length} delta={`${events.length} events since you signed in`} accent={criticalEvents.length ? 'danger' : 'ok'} icon={Icons.alert} />
-        <Stat label="Threat Level" value={threatLevel.toUpperCase()} delta="Unreviewed alerts, last 15 min" accent={threatAccent} icon={Icons.shield} />
+        <Stat label="Detection" value={systemStatus?.online ? 'On' : 'Off'} delta={systemStatus?.online ? `${liveCams.length} camera${liveCams.length === 1 ? '' : 's'} reporting` : 'Start the pipeline to turn it on'} accent={systemStatus?.online ? 'ok' : 'warn'} icon={Icons.ai} />
+        <Stat label="Critical alerts" value={criticalEvents.length} delta={`${events.length} events since you signed in`} accent={criticalEvents.length ? 'danger' : 'ok'} icon={Icons.alert} />
+        <Stat label="Threat level" value={threatLevel[0].toUpperCase() + threatLevel.slice(1)} delta="From unreviewed alerts in the last 15 min" accent={threatAccent} icon={Icons.shield} />
       </div>
 
-      <div className="section-label"><span>Detection volume · last {summary?.period_hours ?? 24}h</span></div>
-      <div className="grid grid-4" style={{ marginBottom: 18 }}>
-        <Stat label="Incidents" value={summary?.total_events ?? '—'} delta={`last ${summary?.period_hours ?? 24}h`} accent="purple" icon={Icons.incident} />
-        <Stat label="Watchlist matches" value={summary?.criminal_detections ?? '—'} delta="held for human review" accent="danger" icon={Icons.watchlist} />
-        <Stat label="Weapon alerts" value={summary?.weapon_detections ?? '—'} delta="multi-frame confirmed" accent="warn" icon={Icons.alert} />
-        <Stat label="Alerts raised" value={summary?.alerts_triggered ?? '—'} delta="see Alert Triage" accent="cyan" icon={Icons.dispatch} />
+      <div className="section-label"><span>Detections</span><small>Last {summary?.period_hours ?? 24} hours</small></div>
+      <div className="grid grid-4" style={{ marginBottom: 24 }}>
+        <Stat label="Events" value={summary?.total_events ?? '—'} delta="Everything the cameras flagged" accent="primary" icon={Icons.incident} />
+        <Stat label="Watchlist matches" value={summary?.criminal_detections ?? '—'} delta="Held until a person reviews them" accent="primary" icon={Icons.watchlist} />
+        <Stat label="Weapon alerts" value={summary?.weapon_detections ?? '—'} delta="Confirmed across several frames" accent="primary" icon={Icons.alert} />
+        <Stat label="Alerts raised" value={summary?.alerts_triggered ?? '—'} delta="Review them in Alerts" accent="primary" icon={Icons.dispatch} />
       </div>
 
-      <div className="grid grid-23" style={{ marginBottom: 18 }}>
-        <Card title="Incident trend" sub="events / day · 7 days">
+      <div className="grid grid-23" style={{ marginBottom: 14 }}>
+        <Card title="Events per day" sub="Last 7 days">
           <AreaChart data={trendData.length ? trendData : [0]} label="Events / day" />
         </Card>
-        <Card title="Detection mix" sub={`last ${summary?.period_hours ?? 24}h`}>
+        <Card title="What was detected" sub={`Last ${summary?.period_hours ?? 24} hours`}>
           <Donut
             label={summary?.total_events ?? 0}
             sublabel="events"
@@ -107,8 +96,8 @@ export function Overview({ ctx }) {
       </div>
 
       <div className="grid grid-23">
-        <Card title="Recent detections" sub="live feed" actions={<Pill tone={ctx.wsConnected ? 'ok' : 'danger'}>{ctx.wsConnected ? 'Live' : 'Offline'}</Pill>}>
-          {events.length === 0 && <Empty icon={Icons.eye}>No detections yet — start the pipeline: <code>./run.sh</code></Empty>}
+        <Card title="Latest detections" actions={<Pill tone={ctx.wsConnected ? 'ok' : 'danger'}>{ctx.wsConnected ? 'Live' : 'Offline'}</Pill>}>
+          {events.length === 0 && <Empty icon={Icons.eye}>Nothing detected yet. Start the pipeline with <code>./run.sh</code></Empty>}
           {events.slice(0, 8).map((evt, i) => (
             <div key={i} className={`row ${evt.severity === 'critical' ? 'crit' : ''}`}>
               <div>
@@ -119,15 +108,15 @@ export function Overview({ ctx }) {
             </div>
           ))}
         </Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card title="Hotspots" sub="last 24h">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Card title="Busiest locations" sub="Last 24 hours">
             <BarList items={locations.slice(0, 5).map((l) => ({ label: l.location || 'Unknown', value: l.events }))} />
           </Card>
-          <Card title="Latest threat location">
+          <Card title="Latest critical alert">
             {mapAlert ? (
               <MapPin lat={mapAlert.lat} lng={mapAlert.lng} label={mapAlert.cameraName || mapAlert.camera} height={180} />
             ) : (
-              <Empty icon={Icons.map}>A GPS pin appears when a critical alert has camera coordinates</Empty>
+              <Empty icon={Icons.map}>The camera's location shows here when a critical alert comes in.</Empty>
             )}
           </Card>
         </div>

@@ -298,7 +298,7 @@ export function LiveMonitoring({ ctx }) {
           }
         >
           {camList.length === 0 ? (
-            <Empty icon={Icons.camera}>No cameras configured. Add one under Camera Management.</Empty>
+            <Empty icon={Icons.camera}>No cameras yet. Add one under Cameras.</Empty>
           ) : (
             <div className="cam-grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
               {tiles.map((cam, i) => (

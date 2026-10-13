@@ -299,10 +299,6 @@ export function Triage({ ctx }) {
   return (
     <>
       <div className="page-head">
-        <div>
-          <h2>Alert Triage</h2>
-          <p>Review each alert against its snapshot before anything is escalated.</p>
-        </div>
         <div className="head-actions">
           <Seg
             value={queue}

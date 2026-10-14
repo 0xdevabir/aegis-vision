@@ -42,22 +42,27 @@ class ThreadedCamera:
 
     def _update(self):
         fails = 0
-        while not self.stopped:
-            ret, frame = self.cap.read()
-            if not ret:
-                fails += 1
-                if fails >= self.MAX_CONSECUTIVE_FAILS:
-                    self.ret = False
-                    self.stopped = True
-                    self.new_frame_event.set()
-                    break
-                time.sleep(0.05)
-                continue
-            fails = 0
-            self.ret = ret
-            self.frame = frame
-            self.last_ok = time.monotonic()
-            self.new_frame_event.set()
+        try:
+            while not self.stopped:
+                ret, frame = self.cap.read()
+                if not ret:
+                    fails += 1
+                    if fails >= self.MAX_CONSECUTIVE_FAILS:
+                        self.ret = False
+                        self.stopped = True
+                        self.new_frame_event.set()
+                        break
+                    time.sleep(0.05)
+                    continue
+                fails = 0
+                self.ret = ret
+                self.frame = frame
+                self.last_ok = time.monotonic()
+                self.new_frame_event.set()
+        finally:
+            # Released here, by the thread that reads: releasing a capture while this thread is
+            # still blocked in read() (stalled network stream) segfaults the whole pipeline.
+            self.cap.release()
 
     def read(self):
         # Wait up to 2 seconds for a new frame
@@ -74,8 +79,7 @@ class ThreadedCamera:
         self.stopped = True
         self.new_frame_event.set()
         if self.thread.is_alive():
-            self.thread.join(timeout=1.0)
-        self.cap.release()
+            self.thread.join(timeout=1.0)   # the reader releases the capture when its read() returns
 
     def isOpened(self):
         return self.cap.isOpened() and not self.stopped

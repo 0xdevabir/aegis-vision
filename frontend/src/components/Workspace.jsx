@@ -1,8 +1,10 @@
 /* The workspace around the page: cameras panel (left), response panel (right),
+   live video strip (top of the centre column),
    and the small top-bar and Home pieces that go with them. */
 import { useEffect, useState } from 'react'
 import { Empty, Icons, SEVERITY_TONE, timeAgo } from './ui'
 import { eventLabel } from '../lib/events'
+import { liveStreamUrl } from '../services/api'
 
 const CAM_STATUS = {
   live: { label: 'Live', dot: 'ok' },
@@ -168,6 +170,43 @@ export function ResponsePanel({ tools, page, setPage, feed, alertCount, open, on
         </>
       )}
     </aside>
+  )
+}
+
+function DeckFeed({ cam, onOpen }) {
+  const [failed, setFailed] = useState(false)
+  const hot = cam.threat_score >= 40 || cam.flags?.length > 0
+  return (
+    <button type="button" className={`deck-tile ${hot ? 'hot' : ''}`} disabled={!onOpen} onClick={() => onOpen(cam)}
+      title={onOpen ? `${cam.name}: open on the Live page` : cam.name} aria-label={cam.name}>
+      {failed ? <span className="deck-wait"><Icons.camera /></span> : (
+        <img src={liveStreamUrl(cam.camera_id)} alt="" onError={() => { setFailed(true); setTimeout(() => setFailed(false), 5000) }} />
+      )}
+      <span className="deck-name"><span className={`status-dot ${hot ? 'hot' : 'ok'}`} />{cam.name}</span>
+    </button>
+  )
+}
+
+/** Top panel: live video only, above every page. A tile opens that camera on the Live page. */
+export function CameraDeck({ camList, open, onToggle, onOpenCamera }) {
+  const live = camList.filter((c) => c.status === 'live')
+  const label = `${open ? 'Hide' : 'Show'} camera video`
+  return (
+    <section className={`panel deck ${open ? '' : 'collapsed'}`} aria-label="Camera video">
+      <div className="deck-head">
+        <span>Live video <small>{live.length} of {camList.length} camera{camList.length === 1 ? '' : 's'}</small></span>
+        <button type="button" className="icon-btn deck-toggle" title={label} aria-label={label} aria-expanded={open} onClick={onToggle}>
+          <Icons.panel />
+        </button>
+      </div>
+      {open && (live.length === 0 ? (
+        <div className="deck-empty"><Icons.camera />No camera is sending video right now.</div>
+      ) : (
+        <div className="deck-strip">
+          {live.map((c) => <DeckFeed key={c.camera_id} cam={c} onOpen={onOpenCamera} />)}
+        </div>
+      ))}
+    </section>
   )
 }
 

@@ -17,6 +17,50 @@ from backend.db.database import SessionLocal  # noqa: E402
 from backend.models.user import User  # noqa: E402
 
 
+DEMO_EMAIL = "demo@aegis.local"   # marks the account this script owns
+ROLES = {"viewer", "operator", "police", "investigator", "supervisor", "admin"}
+
+
+def ensure_demo_user() -> None:
+    """Account behind the sign-in page's "Use the demo account" button (DEMO_LOGIN_PASSWORD set).
+
+    The same password is built into the dashboard, so anyone who can open it can sign in:
+    for demos only. Unset DEMO_LOGIN_PASSWORD and the account is switched off again.
+    """
+    username = os.getenv("DEMO_LOGIN_USERNAME") or "demo"
+    password = os.getenv("DEMO_LOGIN_PASSWORD", "")
+    role = os.getenv("DEMO_LOGIN_ROLE") or "admin"
+    db = SessionLocal()
+    try:
+        if not password:
+            stale = db.query(User).filter(User.email == DEMO_EMAIL, User.is_active.is_(True)).all()
+            for user in stale:
+                user.is_active = False
+            if stale:
+                db.commit()
+                print("[bootstrap] demo login is off: demo account disabled")
+            return
+        if role not in ROLES:
+            print(f"[bootstrap] ERROR: DEMO_LOGIN_ROLE={role!r} is not a role; demo account not created", file=sys.stderr)
+            return
+        user = db.query(User).filter(User.username == username).first()
+        if user and user.email != DEMO_EMAIL:
+            # Never take over a real account's password.
+            print(f"[bootstrap] ERROR: user {username!r} already exists and is not the demo account; "
+                  "pick another DEMO_LOGIN_USERNAME", file=sys.stderr)
+            return
+        if user:
+            user.hashed_password, user.role, user.is_active = hash_password(password), role, True
+        else:
+            db.add(User(username=username, email=DEMO_EMAIL, hashed_password=hash_password(password),
+                        role=role, is_active=True))
+        db.commit()
+        print(f"[bootstrap] WARNING: demo login is ON ({username!r}, role {role}). "
+              "Its password is public in the dashboard; do not expose this deployment.", file=sys.stderr)
+    finally:
+        db.close()
+
+
 def main() -> None:
     db = SessionLocal()
     try:
@@ -45,3 +89,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    ensure_demo_user()

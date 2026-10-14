@@ -4,7 +4,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# Empty = no demo button. Set through DEMO_LOGIN_* in .env (docker-compose.yml).
+ARG VITE_DEMO_USERNAME=""
+ARG VITE_DEMO_PASSWORD=""
+RUN VITE_DEMO_USERNAME="$VITE_DEMO_USERNAME" VITE_DEMO_PASSWORD="$VITE_DEMO_PASSWORD" npm run build
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

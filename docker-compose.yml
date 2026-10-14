@@ -93,7 +93,12 @@ services:
       - ./data/demo:/app/data/demo:ro
 
   web:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Optional demo button on the sign-in page (see DEMO_LOGIN_PASSWORD in .env.example).
+        VITE_DEMO_USERNAME: ${DEMO_LOGIN_USERNAME:-demo}
+        VITE_DEMO_PASSWORD: ${DEMO_LOGIN_PASSWORD:-}
     image: aegis-web:latest
     ports:
       - "${HTTP_PORT:-8080}:80"

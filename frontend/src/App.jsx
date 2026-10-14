@@ -18,7 +18,7 @@ import { Card, Empty, Icons, Pill } from './components/ui'
 import { CommandPalette } from './components/CommandPalette'
 import { NotificationDrawer } from './components/NotificationDrawer'
 import { Copilot } from './components/Copilot'
-import { AccountMenu, AskBar, CameraPanel, Clock, ResponsePanel } from './components/Workspace'
+import { AccountMenu, AskBar, CameraDeck, CameraPanel, Clock, ResponsePanel } from './components/Workspace'
 import { CriticalAlertBanner } from './components/CriticalAlertBanner'
 import { Overview } from './pages/Overview'
 import { LiveMonitoring } from './pages/LiveMonitoring'
@@ -135,8 +135,10 @@ function formatEvent(evt) {
   }
 }
 
-// Local dev only: credentials come from frontend/.env.development.local (gitignored, never loaded by `vite build`).
-const DEMO_LOGIN = import.meta.env.DEV && import.meta.env.VITE_DEMO_USERNAME && import.meta.env.VITE_DEMO_PASSWORD
+// Demo button on the sign-in page, only when both values are set at build time: local dev reads
+// frontend/.env.development.local (gitignored); Docker passes DEMO_LOGIN_* from .env. The password
+// ends up in the bundle, so this is for demos, never for a deployment others can reach.
+const DEMO_LOGIN = import.meta.env.VITE_DEMO_USERNAME && import.meta.env.VITE_DEMO_PASSWORD
   ? { username: import.meta.env.VITE_DEMO_USERNAME, password: import.meta.env.VITE_DEMO_PASSWORD }
   : null
 
@@ -241,7 +243,7 @@ function App() {
   const [liveFocus, setLiveFocus] = useState(null)    // {cameraId, t}: camera picked in the cameras panel
   // Side panels: open where there is room, then whatever the operator last chose.
   const [panels, setPanels] = useState(() => {
-    const roomy = { left: window.innerWidth >= 1360, right: window.innerWidth >= 1100 }
+    const roomy = { left: window.innerWidth >= 1360, right: window.innerWidth >= 1100, top: true }
     try { return { ...roomy, ...JSON.parse(localStorage.getItem('aegis_panels') || '{}') } } catch { return roomy }
   })
   const togglePanel = (side) => {
@@ -418,6 +420,8 @@ function App() {
   }, [])
 
   const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams), [cameras, systemStatus, streamingCams])
+  // A camera picked in the cameras panel or the video strip opens on the Live page.
+  const openCamera = canViewPage(me?.role, 'live') ? (c) => { setLiveFocus({ cameraId: c.camera_id, t: Date.now() }); setPage('live') } : null
 
   /* Page grids follow the centre panel's width (see .center[data-w] in index.css). */
   const centerRef = useRef(null)
@@ -559,7 +563,7 @@ function App() {
         <CameraPanel
           camList={camList} open={panels.left} onToggle={() => togglePanel('left')}
           canManage={can(me?.role, 'camera.manage')} canZones={canViewPage(me?.role, 'zones')} hasMap={canViewPage(me?.role, 'map')}
-          onOpenCamera={canViewPage(me?.role, 'live') ? (c) => { setLiveFocus({ cameraId: c.camera_id, t: Date.now() }); setPage('live') } : null}
+          onOpenCamera={openCamera}
           onLocate={(c) => {
             const at = mapCameras.find((m) => m.camera_id === c.camera_id)
             setMapFocus({ cameraId: c.camera_id, lat: at?.lat, lng: at?.lng, t: Date.now() })
@@ -568,6 +572,11 @@ function App() {
           setPage={setPage}
         />
 
+        <div className="center-stack">
+        {/* The Live page already shows every feed; a second copy would double the stream load. */}
+        {page !== 'live' && (
+          <CameraDeck camList={camList} open={panels.top} onToggle={() => togglePanel('top')} onOpenCamera={openCamera} />
+        )}
         <main className={`panel center ${page === 'overview' ? 'has-ask' : ''}`} ref={centerRef}>
           <nav className="center-head" aria-label="Views">
             {tabPages.map((p) => {
@@ -654,6 +663,7 @@ function App() {
             </button>
           </nav>
         </main>
+        </div>
 
         <ResponsePanel
           tools={TOOLS.filter((t) => canViewPage(me?.role, t.id))} page={page} setPage={setPage}

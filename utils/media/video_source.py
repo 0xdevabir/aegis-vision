@@ -148,16 +148,17 @@ def is_video_file(source) -> bool:
 def resolve_source(source):
     """Expand env vars in source strings, e.g. ${RTSP_GATE_1}.
 
-    Local webcam indexes map to LOCAL_CAMERA_URL when set: containers cannot see the
-    host's camera, so Docker points that at scripts/webcam_bridge.py on the host.
+    Local webcams (an index or device:<uid>) map to LOCAL_CAMERA_URL when set: containers cannot
+    see the host's cameras, so Docker reads each one through scripts/webcam_bridge.py on the host.
     """
     if isinstance(source, str) and source.strip().isdigit():
         # The dashboard stores sources as text, so a webcam index comes back as "0": OpenCV would
         # treat that as a file called "0" instead of camera 0.
         source = int(source.strip())
+    if os.getenv("LOCAL_CAMERA_URL") and (isinstance(source, int) or str(source).startswith(DEVICE_PREFIX)):
+        return bridge_url(source)
     if not isinstance(source, str):
-        bridge = os.getenv("LOCAL_CAMERA_URL", "")
-        return bridge if bridge and isinstance(source, int) else source
+        return source
     if source.startswith("${") and source.endswith("}"):
         env_name = source[2:-1]
         return os.getenv(env_name, source)

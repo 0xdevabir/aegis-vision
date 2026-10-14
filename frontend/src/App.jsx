@@ -573,10 +573,7 @@ function App() {
         />
 
         <div className="center-stack">
-        {/* The Live page already shows every feed; a second copy would double the stream load. */}
-        {page !== 'live' && (
-          <CameraDeck camList={camList} open={panels.top} onToggle={() => togglePanel('top')} onOpenCamera={openCamera} />
-        )}
+        <CameraDeck camList={camList} open={panels.top} onToggle={() => togglePanel('top')} onOpenCamera={openCamera} />
         <main className={`panel center ${page === 'overview' ? 'has-ask' : ''}`} ref={centerRef}>
           <nav className="center-head" aria-label="Views">
             {tabPages.map((p) => {

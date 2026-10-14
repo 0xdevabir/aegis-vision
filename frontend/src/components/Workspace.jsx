@@ -176,13 +176,16 @@ export function ResponsePanel({ tools, page, setPage, feed, alertCount, open, on
 function DeckFeed({ cam, onOpen }) {
   const [failed, setFailed] = useState(false)
   const hot = cam.threat_score >= 40 || cam.flags?.length > 0
+  const live = cam.status === 'live'
   return (
     <button type="button" className={`deck-tile ${hot ? 'hot' : ''}`} disabled={!onOpen} onClick={() => onOpen(cam)}
-      title={onOpen ? `${cam.name}: open on the Live page` : cam.name} aria-label={cam.name}>
-      {failed ? <span className="deck-wait"><Icons.camera /></span> : (
+      title={onOpen ? `${cam.name}: open on the Live page` : cam.name} aria-label={`${cam.name}, ${CAM_STATUS[cam.status].label}`}>
+      {live && !failed ? (
         <img src={liveStreamUrl(cam.camera_id)} alt="" onError={() => { setFailed(true); setTimeout(() => setFailed(false), 5000) }} />
+      ) : (
+        <span className="deck-wait"><Icons.camera />{live ? 'Waiting for video' : CAM_STATUS[cam.status].label}</span>
       )}
-      <span className="deck-name"><span className={`status-dot ${hot ? 'hot' : 'ok'}`} />{cam.name}</span>
+      <span className="deck-name"><span className={`status-dot ${hot ? 'hot' : CAM_STATUS[cam.status].dot}`} />{cam.name}</span>
     </button>
   )
 }
@@ -199,11 +202,11 @@ export function CameraDeck({ camList, open, onToggle, onOpenCamera }) {
           <Icons.panel />
         </button>
       </div>
-      {open && (live.length === 0 ? (
-        <div className="deck-empty"><Icons.camera />No camera is sending video right now.</div>
+      {open && (camList.length === 0 ? (
+        <div className="deck-empty"><Icons.camera />No cameras have been set up yet.</div>
       ) : (
         <div className="deck-strip">
-          {live.map((c) => <DeckFeed key={c.camera_id} cam={c} onOpen={onOpenCamera} />)}
+          {camList.map((c) => <DeckFeed key={c.camera_id} cam={c} onOpen={onOpenCamera} />)}
         </div>
       ))}
     </section>

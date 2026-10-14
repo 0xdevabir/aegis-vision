@@ -101,36 +101,6 @@ function CamFeed({ cam, objectFit = 'cover', starting = false, onPower }) {
   )
 }
 
-function CamTile({ cam, selected, alerting, starting, onSelect, onExpand, onPower }) {
-  if (!cam) {
-    return <div className="cam-tile empty"><span>Empty slot</span></div>
-  }
-  return (
-    <div
-      className={`cam-tile ${cam.status} ${alerting ? 'alerting' : ''} ${selected ? 'selected' : ''}`}
-      data-cam-id={cam.camera_id}
-      onClick={onSelect}
-      onDoubleClick={onExpand}
-      role="button"
-      tabIndex={0}
-      aria-label={`${cam.name}, ${STATUS[cam.status].label}`}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(); if (e.key === 'f') onExpand() }}
-    >
-      <CamFeed cam={cam} starting={starting} onPower={onPower} />
-      <button type="button" className="cam-expand" title="Full screen (double-click)" aria-label="Full screen"
-        onClick={(e) => { e.stopPropagation(); onExpand() }}>
-        <ExpandIcon />
-      </button>
-      {onPower && cam.status !== 'off' && (
-        <button type="button" className="cam-expand cam-power" title="Stop camera" aria-label={`Stop ${cam.name}`}
-          onClick={(e) => { e.stopPropagation(); onPower(false) }}>
-          <PowerIcon />
-        </button>
-      )}
-    </div>
-  )
-}
-
 function CamFullscreen({ cam, alerting, onClose }) {
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -245,7 +215,6 @@ function PtzPad({ cameraId }) {
 
 export function LiveMonitoring({ ctx }) {
   const { systemStatus, cameras, threatLevel, streamingCams = [], me, captureEvent, liveFocus } = ctx
-  const [layout, setLayout] = useState('auto')
   const [selectedId, setSelectedId] = useState(liveFocus?.cameraId || null)
   // A camera picked in the cameras panel while this page is already open.
   const [seenFocus, setSeenFocus] = useState(liveFocus || null)
@@ -289,12 +258,6 @@ export function LiveMonitoring({ ctx }) {
     live: camList.filter((c) => c.status === 'live').length,
     online: camList.filter((c) => c.status === 'live' || c.status === 'online').length,
   }
-
-  const slots = layout === 'auto' ? camList.length : Number(layout)
-  const cols = layout === 'auto'
-    ? (slots <= 1 ? 1 : slots <= 4 ? 2 : slots <= 9 ? 3 : 4)
-    : ({ 1: 1, 4: 2, 9: 3, 16: 4 }[slots])
-  const tiles = Array.from({ length: Math.max(slots, 0) }, (_, i) => camList[i] || null)
 
   const activeCam = camList.find((c) => c.camera_id === selectedId)?.camera_id || camList[0]?.camera_id
   const activeInfo = camList.find((c) => c.camera_id === activeCam)
@@ -341,41 +304,42 @@ export function LiveMonitoring({ ctx }) {
         <Stat label="Recorded video" value={`${coverageHrs.toFixed(1)} h`} accent="primary" delta="Selected camera · last 24 hours" icon={Icons.clock} />
       </div>
 
+      {/* The video itself is in the strip above every page; this page is controls and recordings. */}
       <div className="live-layout">
         <div className="live-main">
-        <Card
-          title="Live view"
-          sub={activeInfo ? `Selected: ${activeInfo.name}` : undefined}
-          actions={
-            <div className="cam-controls">
-              <Seg value={layout} onChange={setLayout}
-                options={[{ value: 'auto', label: 'Auto' }, { value: 1, label: '1' }, { value: 4, label: '2×2' }, { value: 9, label: '3×3' }]} />
-              <Pill tone={systemStatus?.online ? 'ok' : 'warn'}>{pipelineLabel}</Pill>
+          <Card title="Cameras" sub={activeInfo ? `Selected: ${activeInfo.name}` : `${camList.length}`} flush
+            actions={<Pill tone={systemStatus?.online ? 'ok' : 'warn'}>{pipelineLabel}</Pill>}>
+            <div className="cam-list">
+              {camList.map((c) => {
+                const isStarting = starting.has(c.camera_id) && c.status !== 'live'
+                return (
+                  <div key={c.camera_id} className="side-cam">
+                    <button type="button" className={`cam-row ${c.camera_id === activeCam ? 'active' : ''}`}
+                      onClick={() => setSelectedId(c.camera_id)}>
+                      <span className={`status-dot ${STATUS[c.status].tone}`} />
+                      <span className="cam-row-main">
+                        <b>{c.name}</b>
+                        <span>{isStarting ? 'Starting… this can take up to half a minute' : c.location || c.camera_id}</span>
+                      </span>
+                      <Tag tone={STATUS[c.status].tone}>{STATUS[c.status].label}</Tag>
+                    </button>
+                    {canPower && c.camera_id in power && (
+                      c.status === 'off'
+                        ? <button type="button" className="btn btn-sm btn-primary" onClick={() => switchCamera(c, true)}><PowerIcon /> Start</button>
+                        : <button type="button" className="icon-btn" title="Stop camera" aria-label={`Stop ${c.name}`} onClick={() => switchCamera(c, false)}><PowerIcon /></button>
+                    )}
+                    <button type="button" className="icon-btn" title="Full screen" aria-label={`${c.name} full screen`} onClick={() => setFullscreenId(c.camera_id)}>
+                      <ExpandIcon />
+                    </button>
+                  </div>
+                )
+              })}
+              {camList.length === 0 && <Empty icon={Icons.camera}>No cameras yet. Add one under Cameras.</Empty>}
             </div>
-          }
-        >
-          {camList.length === 0 ? (
-            <Empty icon={Icons.camera}>No cameras yet. Add one under Cameras.</Empty>
-          ) : (
-            <div className="cam-grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-              {tiles.map((cam, i) => (
-                <CamTile
-                  key={cam?.camera_id || `empty-${i}`}
-                  cam={cam}
-                  selected={cam && cam.camera_id === activeCam && tiles.length > 1}
-                  alerting={cam && (cam.camera_id === alertingId || (cam.status === 'live' && cam.flags.length > 0))}
-                  onSelect={() => cam && setSelectedId(cam.camera_id)}
-                  onExpand={() => cam && setFullscreenId(cam.camera_id)}
-                  starting={cam && starting.has(cam.camera_id)}
-                  onPower={cam && canPower && cam.camera_id in power ? (on) => switchCamera(cam, on) : undefined}
-                />
-              ))}
-            </div>
-          )}
-          {!systemStatus?.online && camList.length > 0 && (
-            <p className="live-hint">The analysis pipeline is not reporting. Cameras stay offline until it is running.</p>
-          )}
-        </Card>
+            {!systemStatus?.online && camList.length > 0 && (
+              <p className="live-hint" style={{ padding: '0 14px 14px' }}>The analysis pipeline is not reporting. Cameras stay offline until it is running.</p>
+            )}
+          </Card>
 
       <Card title="Recordings" sub={`${timeline.length} clips · last 24 hours · ${activeInfo?.name || 'no camera selected'}`}
         actions={<button className="btn btn-sm" onClick={loadTimeline}>Refresh</button>}>
@@ -419,23 +383,6 @@ export function LiveMonitoring({ ctx }) {
 
         <div className="live-rail">
           {me?.role && me.role !== 'viewer' && <CaptureBasket captureEvent={captureEvent} />}
-          <Card title="Cameras" sub={`${camList.length}`} flush>
-            <div className="cam-list">
-              {camList.map((c) => (
-                <button key={c.camera_id} type="button"
-                  className={`cam-row ${c.camera_id === activeCam ? 'active' : ''}`}
-                  onClick={() => setSelectedId(c.camera_id)}>
-                  <span className={`status-dot ${STATUS[c.status].tone}`} />
-                  <span className="cam-row-main">
-                    <b>{c.name}</b>
-                    <span>{c.location || c.camera_id}</span>
-                  </span>
-                  <Tag tone={STATUS[c.status].tone}>{STATUS[c.status].label}</Tag>
-                </button>
-              ))}
-              {camList.length === 0 && <div className="live-hint" style={{ padding: 14 }}>No cameras yet</div>}
-            </div>
-          </Card>
           {can(me?.role, 'ptz') && (
             <Card title="Pan, tilt and zoom" sub={activeInfo?.name || 'No camera selected'}>
               <PtzPad cameraId={activeCam} />

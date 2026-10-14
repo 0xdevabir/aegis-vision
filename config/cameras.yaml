@@ -17,7 +17,7 @@ cameras:
   enabled: true
   fps_limit: 8
   priority: high
-  started: false
+  started: true
 - id: usb_webcam
   name: USB Webcam (C270)
   source: '1'
@@ -27,7 +27,7 @@ cameras:
   enabled: true
   fps_limit: 8
   priority: high
-  started: false
+  started: true
 - id: tarik
   name: tarik camera
   source: http://192.168.1.3:8080/video

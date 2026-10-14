@@ -54,6 +54,10 @@ services:
     environment:
       <<: *app-env
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # The host's cameras, as listed by scripts/webcam_bridge.py (GET /devices).
+      LOCAL_CAMERA_URL: ${LOCAL_CAMERA_URL:-http://host.docker.internal:8090/video}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

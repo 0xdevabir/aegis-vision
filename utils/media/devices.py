@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -68,6 +69,32 @@ def list_local_cameras() -> list[dict]:
         cam.setdefault("index", position)
         cam["source"] = f"{DEVICE_PREFIX}{cam['uid']}" if cam["uid"] else str(cam["index"])
     return cameras
+
+
+def bridge_url(source: str) -> str:
+    """Video URL on the host webcam bridge for a local camera source ("0" or "device:<uid>")."""
+    from urllib.parse import quote
+    return f"{os.environ['LOCAL_CAMERA_URL']}?source={quote(str(source), safe=':')}"
+
+
+def list_host_cameras() -> list[dict]:
+    """The cameras of the machine the user sits at.
+
+    Inside Docker that is not this machine: ask scripts/webcam_bridge.py on the host instead.
+    Empty when the bridge is not running, so nothing is reported as unplugged by mistake.
+    """
+    bridge = os.getenv("LOCAL_CAMERA_URL", "")
+    if not bridge:
+        return list_local_cameras()
+    from urllib.parse import urlsplit
+    import urllib.request
+    parts = urlsplit(bridge)
+    try:
+        with urllib.request.urlopen(f"{parts.scheme}://{parts.netloc}/devices", timeout=3) as r:
+            return json.loads(r.read()).get("devices", [])
+    except Exception as e:  # noqa: BLE001  an old bridge or none at all: nothing to list
+        logger.debug(f"Could not list host cameras through the bridge: {e}")
+        return []
 
 
 def snapshot_local_cameras() -> list[dict]:

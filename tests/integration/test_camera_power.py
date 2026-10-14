@@ -56,3 +56,39 @@ def test_operator_starts_and_stops_a_camera(tmp_path, monkeypatch):
     assert client.post("/api/v1/cameras/nope/power", json={"on": True}, headers=op).status_code == 404
     assert client.post("/api/v1/cameras/laptop/power", json={"on": True}, headers=_auth("police")).status_code == 403
     assert client.post("/api/v1/cameras/laptop/power", json={"on": True}).status_code == 401
+
+
+def test_added_camera_runs_and_deleted_camera_stays_deleted(tmp_path, monkeypatch):
+    init_db()
+    path = tmp_path / "cameras.yaml"
+    path.write_text(yaml.safe_dump({"cameras": [{"id": "laptop", "source": "0", "enabled": True}]}))
+    monkeypatch.setattr(camera_routes, "CAMERAS_YAML", path)
+    admin = _auth("admin")
+    ids = lambda: {c["camera_id"]: c["active"] for c in client.get("/api/v1/cameras/", headers=admin).json()}
+
+    r = client.post("/api/v1/cameras/", json={"camera_id": "door_cam", "name": "Door",
+                                              "rtsp_url": "http://10.0.0.5:8080/video"}, headers=admin)
+    assert r.status_code == 200
+    assert "door_cam" in {c["id"] for c in yaml.safe_load(path.read_text())["cameras"]}
+    assert ids()["door_cam"] is True
+
+    assert client.delete("/api/v1/cameras/door_cam", headers=admin).status_code == 200
+    assert [c["id"] for c in yaml.safe_load(path.read_text())["cameras"]] == ["laptop"]
+    assert "door_cam" not in ids()          # listing used to copy the leftover yaml entry back
+
+
+def test_camera_missing_from_yaml_is_not_shown_as_live(tmp_path, monkeypatch):
+    from backend.models.camera import Camera
+    init_db()
+    path = tmp_path / "cameras.yaml"
+    path.write_text(yaml.safe_dump({"cameras": []}))
+    monkeypatch.setattr(camera_routes, "CAMERAS_YAML", path)
+    db = SessionLocal()
+    if not db.query(Camera).filter(Camera.camera_id == "orphan").first():
+        db.add(Camera(camera_id="orphan", name="Orphan", rtsp_url="5", active=True))
+        db.commit()
+    db.close()
+    admin = _auth("admin")
+    cams = {c["camera_id"]: c["active"] for c in client.get("/api/v1/cameras/", headers=admin).json()}
+    assert cams["orphan"] is False
+    assert client.delete("/api/v1/cameras/orphan", headers=admin).status_code == 200

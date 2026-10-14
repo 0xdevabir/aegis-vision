@@ -91,14 +91,18 @@ class CameraResponse(BaseModel):
 @router.get("/", response_model=List[CameraResponse])
 def list_cameras(db: Session = Depends(get_db), user: User = Depends(operator_or_admin)):
     # Auto-sync cameras from cameras.yaml into DB
-    yaml_path = Path(__file__).resolve().parents[2] / "config" / "cameras.yaml"   # not cwd-dependent
+    yaml_path = CAMERAS_YAML
     if yaml_path.exists():
         try:
             with open(yaml_path, "r") as f:
                 ydata = yaml.safe_load(f) or {}
             existing = {c.camera_id: c for c in db.query(Camera).all()}
             existing_ids = set(existing)
-            for cam in ydata.get("cameras", []):
+            in_yaml = {c.get("id") for c in ydata.get("cameras") or []}
+            for cam_id, row in existing.items():
+                if cam_id not in in_yaml:
+                    row.active = False      # the pipeline doesn't run it: never show it as live
+            for cam in ydata.get("cameras") or []:
                 cam_id = cam.get("id")
                 if cam_id in existing:
                     # cameras.yaml is what the pipeline actually runs: mirror its enabled flag.
@@ -169,8 +173,11 @@ def _write_cameras_yaml(path: Path, data: dict):
     os.replace(tmp, path)
 
 
+CAMERAS_YAML = Path(__file__).resolve().parents[2] / "config" / "cameras.yaml"
+
+
 def sync_camera_to_yaml(cam: Camera):
-    yaml_path = Path("config/cameras.yaml")
+    yaml_path = CAMERAS_YAML
     if not yaml_path.exists():
         return
     try:
@@ -194,7 +201,8 @@ def sync_camera_to_yaml(cam: Camera):
                 found = True
                 break
                 
-        if not found and cam.active:
+        if not found:
+            # Paused cameras are listed too: a camera missing from the file can't be resumed
             cameras.append({
                 "id": cam.camera_id,
                 "name": cam.name,
@@ -202,7 +210,7 @@ def sync_camera_to_yaml(cam: Camera):
                 "location": cam.location,
                 "lat": cam.lat,
                 "lng": cam.lng,
-                "enabled": True,
+                "enabled": bool(cam.active),
                 "fps_limit": 15,
                 "priority": "high"
             })
@@ -212,7 +220,17 @@ def sync_camera_to_yaml(cam: Camera):
     except Exception as e:
         logger.error(f"Failed to sync camera to yaml: {e}")
 
-CAMERAS_YAML = Path(__file__).resolve().parents[2] / "config" / "cameras.yaml"
+
+def remove_camera_from_yaml(camera_id: str):
+    """Drop the entry outright. Leaving it disabled brought a deleted camera back: the camera
+    list copies every cameras.yaml entry missing from the DB into the DB."""
+    if not CAMERAS_YAML.exists():
+        return
+    data = yaml.safe_load(CAMERAS_YAML.read_text()) or {}
+    data["cameras"] = [c for c in data.get("cameras") or [] if c.get("id") != camera_id]
+    _write_cameras_yaml(CAMERAS_YAML, data)
+
+
 POWER_ROLES = {"admin", "supervisor", "operator"}
 
 
@@ -291,8 +309,11 @@ def delete_camera(camera_id: str, request: Request, db: Session = Depends(get_db
     camera = db.query(Camera).filter(Camera.camera_id == camera_id).first()
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
-    camera.active = False
-    sync_camera_to_yaml(camera)
+    try:
+        remove_camera_from_yaml(camera_id)      # the pipeline stops it within ~2 s
+    except Exception as e:
+        logger.error(f"Failed to remove camera {camera_id} from yaml: {e}")
+        raise HTTPException(status_code=500, detail="Could not update cameras.yaml; camera not deleted")
     _forget_heartbeat(camera_id)
     log_audit(db, admin, "CAMERA_DELETE", "camera", camera_id, f"name={camera.name}", request)
     db.delete(camera)

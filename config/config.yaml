@@ -22,6 +22,7 @@ model_dir: "models"
 human_model: "yolov8n.pt"         # Nano model for speed
 weapon_model: "weapon_yolo.pt"
 # vehicle_model uses yolov8l.pt by default (hardcoded in pipeline)
+vehicle_detection: false           # yolov8l doubles detection time per frame; enable for road/parking cameras
 
 # --- Tracking ---
 tracking:
@@ -42,7 +43,7 @@ action:
   min_confidence: 0.6              # softmax probability needed to raise a reason
 
 # --- Detection Thresholds ---
-confidence_threshold: 0.5
+confidence_threshold: 0.4         # 0.5 dropped people who were partly hidden or far away
 weapon_conf_threshold: 0.4
 face_tolerance: 0.45
 

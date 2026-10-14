@@ -53,3 +53,22 @@ cameras:
   location: uttara sector 9
   enabled: false
   fps_limit: 8
+- id: abir_camera
+  name: Abir Camera
+  source: device:61ED08B2-656F-4832-96CA-800F00000001
+  location: Local
+  lat: null
+  lng: null
+  enabled: true
+  fps_limit: 15
+  priority: high
+  started: false
+- id: obs_virtual_camera
+  name: OBS Virtual Camera
+  source: device:7626645E-4425-469E-9D8B-97E0FA59AC75
+  location: Local
+  lat: null
+  lng: null
+  enabled: true
+  fps_limit: 15
+  priority: high

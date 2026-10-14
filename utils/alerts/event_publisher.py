@@ -139,6 +139,11 @@ class _FrameSender(threading.Thread):
         cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
         return cls(u.hostname, u.port or (443 if u.scheme == "https" else 80), timeout=3.0)
 
+    @staticmethod
+    def _post(conn, path, jpeg, headers) -> None:
+        conn.request("POST", path, body=jpeg, headers=headers)
+        conn.getresponse().read()                   # drain so the connection can be reused
+
     def run(self) -> None:
         conn = None
         path = f"/api/v1/stream/frame/{self.camera_id}"
@@ -149,10 +154,17 @@ class _FrameSender(threading.Thread):
                     self._cv.wait()
                 jpeg, self._slot = self._slot, None
             try:
-                if conn is None:
-                    conn = self._connect()
-                conn.request("POST", path, body=jpeg, headers=headers)
-                conn.getresponse().read()           # drain so the connection can be reused
+                if conn is not None:
+                    try:
+                        self._post(conn, path, jpeg, headers)
+                        continue
+                    except Exception:  # noqa: BLE001
+                        # A camera stopped and started again finds its kept-alive connection closed
+                        # by the backend meanwhile (Broken pipe): resend once on a fresh one.
+                        conn.close()
+                        conn = None
+                conn = self._connect()
+                self._post(conn, path, jpeg, headers)
             except Exception as e:  # noqa: BLE001
                 if conn is not None:
                     conn.close()

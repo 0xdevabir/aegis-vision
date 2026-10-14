@@ -80,3 +80,11 @@ def test_person_followed_from_another_camera_is_red():
     ctx.tracked = {1: types.SimpleNamespace(label="x")}
     img = StreamOverlay().render(_blank(), ctx, 1.0, 0.0)
     assert img[100, 100, 2] > 200 and img[100, 100, 1] < 100
+
+
+def test_person_missed_in_one_ai_frame_keeps_their_box_where_it_was():
+    ov = StreamOverlay()
+    ov.render(_blank(), _ctx([FakeTrack(1, (100, 100, 200, 300))]), 1.0, 0.0)
+    # One missed detection: the tracker's predicted box has drifted, the shown box must not follow
+    img = ov.render(_blank(), _ctx([FakeTrack(1, (400, 100, 500, 300), since=1)]), 1.0, 0.2)
+    assert img.any() and ov._shown[1] == [100.0, 100.0, 200.0, 300.0]

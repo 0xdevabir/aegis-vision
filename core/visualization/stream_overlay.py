@@ -23,6 +23,7 @@ RED = (50, 50, 235)
 WHITE = (255, 255, 255)
 EASE = 0.45                  # share of the gap to the newest box covered per rendered frame
 DROP_AFTER = 1.0             # seconds a person may go unseen before their box is removed
+HOLD_MISSES = 1              # AI frames a person may be missed in and keep their (frozen) box
 
 
 class StreamOverlay:
@@ -50,9 +51,11 @@ class StreamOverlay:
         for tid in [k for k, ts in self._seen.items() if now - ts > DROP_AFTER]:
             self._seen.pop(tid, None)
             self._shown.pop(tid, None)
-        # Draw only people from the newest result (the AI result is stamped each time it changes).
+        # Draw people from the newest result, plus anyone the detector missed in just that one
+        # frame: their box stays where it was last seen. At 1-2 AI results/s per camera, dropping
+        # them made boxes blink off whenever a single detection fell under the threshold.
         live = {t.track_id for t in ctx.tracks
-                if t.is_confirmed() and getattr(t, "time_since_update", 0) == 0}
+                if t.is_confirmed() and getattr(t, "time_since_update", 0) <= HOLD_MISSES}
         return [(tid, box) for tid, box in self._shown.items() if tid in live]
 
     def render(self, img, ctx, scale: float, now: float):

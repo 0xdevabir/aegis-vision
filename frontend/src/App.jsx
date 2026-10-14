@@ -5,7 +5,7 @@ import {
   fetchIncidentReport, fetchCameras, fetchAnalyticsSummary,
   fetchAnalyticsTrends, fetchAnalyticsLocations, fetchVehiclePlates,
   fetchVehicleDetections, fetchAuditLogs, fetchMe, fetchStreamingCameras,
-  fetchReviewCount, acknowledgeAlert, refreshSession, fetchCameraDevices, addCamera,
+  fetchReviewCount, acknowledgeAlert, refreshSession, fetchCameraDevices, addCamera, fetchCameraPower,
 } from './services/api'
 import { useToast } from './components/Toast'
 import { ProfileModal } from './components/ProfileModal'
@@ -422,12 +422,18 @@ function App() {
   }, [])
 
   // Cameras plugged into this computer right now. Polled, so plugging one in or out shows up by itself.
+  // `power`: which cameras are switched on. Shared by every camera view so a stopped camera
+  // reads "Off" everywhere, and polled so a change made elsewhere (or a new camera) shows up.
   const [devices, setDevices] = useState({ devices: [], unplugged: [] })
+  const [power, setPower] = useState({})
   useEffect(() => {
     if (!authed || !can(me?.role, 'camera.power')) return undefined    // operational roles only (403 otherwise)
-    const load = () => fetchCameraDevices().then(setDevices).catch(() => {})
+    const load = () => {
+      fetchCameraDevices().then(setDevices).catch(() => {})
+      fetchCameraPower().then(setPower).catch(() => {})
+    }
     load()
-    const timer = setInterval(load, 10000)
+    const timer = setInterval(load, 5000)
     return () => clearInterval(timer)
   }, [authed, me?.role, cameras])
   const connectDevice = async (d) => {
@@ -440,8 +446,8 @@ function App() {
     }
   }
 
-  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, {}, devices.unplugged),
-    [cameras, systemStatus, streamingCams, devices.unplugged])
+  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, power, devices.unplugged),
+    [cameras, systemStatus, streamingCams, power, devices.unplugged])
   // A camera picked in the cameras panel or the video strip opens on the Live page.
   const openCamera = canViewPage(me?.role, 'live') ? (c) => { setLiveFocus({ cameraId: c.camera_id, t: Date.now() }); setPage('live') } : null
 
@@ -506,7 +512,7 @@ function App() {
     knownPersons, reloadKnownPersons, evidence, mapCameras, mapEvents, cameras,
     report, summary, trends, locations,
     plates, vehicleDetections, auditLogs, reloadVehicles,
-    me, streamingCams, reloadCameras, setPage, mapFocus, liveFocus, unplugged: devices.unplugged,
+    me, streamingCams, reloadCameras, setPage, mapFocus, liveFocus, unplugged: devices.unplugged, power, setPower,
     reviewPending, refreshReviewCount, captureEvent,
     theme, setTheme,
   }

@@ -95,7 +95,10 @@ def build_pipeline(cfg, base_dir, camera_location=None, zones=None, lines=None):
         logger.warning(f"Weapon detector DISABLED: model not found at {weapon_model_path}")
 
     vehicle_detector = None
-    if os.path.exists(vehicle_model_path):
+    if not cfg.get("vehicle_detection", True):
+        # YOLOv8l: ~2x the person model's time, on every frame of every camera
+        logger.info("Vehicle detector: OFF (vehicle_detection: false)")
+    elif os.path.exists(vehicle_model_path):
         try:
             vehicle_detector = _shared(
                 ("vehicle", vehicle_model_path),

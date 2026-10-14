@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import Optional, List
+import os
 import urllib.parse
 import requests
 import logging
@@ -160,6 +161,14 @@ def _forget_heartbeat(camera_id: str):
     _pipeline_status["cameras"].pop(camera_id, None)
 
 
+def _write_cameras_yaml(path: Path, data: dict):
+    """Replace cameras.yaml in one step: the pipeline re-reads it every 2 s, and a half-written
+    file reads as "no cameras", which stops every camera and restarts it on the next read."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(yaml.safe_dump(data, sort_keys=False))
+    os.replace(tmp, path)
+
+
 def sync_camera_to_yaml(cam: Camera):
     yaml_path = Path("config/cameras.yaml")
     if not yaml_path.exists():
@@ -199,8 +208,7 @@ def sync_camera_to_yaml(cam: Camera):
             })
             
         data["cameras"] = cameras
-        with open(yaml_path, "w") as f:
-            yaml.safe_dump(data, f, sort_keys=False)
+        _write_cameras_yaml(yaml_path, data)
     except Exception as e:
         logger.error(f"Failed to sync camera to yaml: {e}")
 
@@ -237,7 +245,7 @@ def set_camera_power(camera_id: str, body: PowerBody, request: Request, db: Sess
     if body.on and not cam.get("enabled", True):
         raise HTTPException(status_code=409, detail="This camera is paused. Resume it on the Cameras page first.")
     cam["started"] = body.on
-    CAMERAS_YAML.write_text(yaml.safe_dump(data, sort_keys=False))
+    _write_cameras_yaml(CAMERAS_YAML, data)
     if not body.on:
         _forget_heartbeat(camera_id)
     log_audit(db, user, "CAMERA_START" if body.on else "CAMERA_STOP", "camera", camera_id, "", request)

@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast'
 import { CaptureBasket } from '../components/CaptureBasket'
 import { Card, Icons, Seg, Pill, Stat, Tag, Empty, timeAgo, useConfirm } from '../components/ui'
 import {
-  liveStreamUrl, fetchCameraPower, setCameraPower,
+  liveStreamUrl, setCameraPower,
   fetchVmsTimeline, fetchPtz, ptzMove, ptzStop, ptzHome, ptzSetMode,
   ptzSavePreset, ptzGotoPreset, openVmsPlayback,
 } from '../services/api'
@@ -214,7 +214,7 @@ function PtzPad({ cameraId }) {
 }
 
 export function LiveMonitoring({ ctx }) {
-  const { systemStatus, cameras, threatLevel, streamingCams = [], me, captureEvent, liveFocus } = ctx
+  const { systemStatus, cameras, threatLevel, streamingCams = [], me, captureEvent, liveFocus, power = {}, setPower } = ctx
   const [selectedId, setSelectedId] = useState(liveFocus?.cameraId || null)
   // A camera picked in the cameras panel while this page is already open.
   const [seenFocus, setSeenFocus] = useState(liveFocus || null)
@@ -235,9 +235,7 @@ export function LiveMonitoring({ ctx }) {
   // Cameras stay off until someone starts them here; `power` says which ones are switched on.
   const { push: toast } = useToast()
   const [ask, confirmDialog] = useConfirm()
-  const [power, setPower] = useState({})
   const [starting, setStarting] = useState(() => new Set())
-  useEffect(() => { fetchCameraPower().then(setPower).catch(() => {}) }, [])
   const canPower = can(me?.role, 'camera.power')
 
   const switchCamera = async (cam, on) => {

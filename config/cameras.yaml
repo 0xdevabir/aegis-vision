@@ -1,74 +1,21 @@
 cameras:
-- id: gate_1
-  name: Main Gate Camera 1
-  source: 0
-  location: Gate_1
+- id: usb_webcam
+  name: C270 HD WEBCAM
+  source: device:0x1140000046d0825
+  location: Local
   lat: 23.8103
   lng: 90.4125
-  enabled: false
+  enabled: true
+  started: true
   fps_limit: 8
   priority: high
 - id: laptop
   name: Laptop Camera
-  source: device:6C707041-05AC-0011-0003-000000000001
+  source: device:46435DF4-8948-46F7-875D-CA7BB6DF451A
   location: Local
   lat: 23.8103
   lng: 90.4125
   enabled: true
-  fps_limit: 8
-  priority: high
   started: true
-- id: usb_webcam
-  name: USB Webcam (C270)
-  source: '1'
-  location: Local
-  lat: 23.8103
-  lng: 90.4125
-  enabled: false
   fps_limit: 8
-  priority: high
-  started: true
-- id: tarik
-  name: tarik camera
-  source: http://192.168.1.3:8080/video
-  location: Local
-  enabled: false
-  fps_limit: 8
-- id: tarik_tab
-  name: tarik tab
-  source: http://192.168.1.6:8080/video
-  location: Local
-  enabled: false
-  fps_limit: 8
-- id: mobile
-  name: Mobile IP Camera
-  source: http://192.168.0.103:8080/video
-  location: Mobile
-  enabled: false
-  fps_limit: 8
-  priority: high
-- id: fahim_camera
-  name: fahim camera
-  source: http://192.168.0.101:8080/video
-  location: uttara sector 9
-  enabled: false
-  fps_limit: 8
-- id: abir_camera
-  name: Abir Camera
-  source: device:61ED08B2-656F-4832-96CA-800F00000001
-  location: Local
-  lat: null
-  lng: null
-  enabled: true
-  fps_limit: 15
-  priority: high
-  started: false
-- id: obs_virtual_camera
-  name: OBS Virtual Camera
-  source: device:7626645E-4425-469E-9D8B-97E0FA59AC75
-  location: Local
-  lat: null
-  lng: null
-  enabled: true
-  fps_limit: 15
   priority: high

@@ -170,13 +170,13 @@ def _write_cameras_yaml(path: Path, data: dict):
 
 
 def sync_camera_to_yaml(cam: Camera):
-    yaml_path = Path("config/cameras.yaml")
+    yaml_path = CAMERAS_YAML
     if not yaml_path.exists():
         return
     try:
         with open(yaml_path, "r") as f:
             data = yaml.safe_load(f) or {"cameras": []}
-            
+
         cameras = data.get("cameras", [])
         found = False
         for c in cameras:
@@ -191,9 +191,11 @@ def sync_camera_to_yaml(cam: Camera):
                 if cam.lng is not None:
                     c["lng"] = cam.lng
                 c["enabled"] = cam.active
+                # A camera that is in use must actually open; a paused one must stay closed.
+                c["started"] = bool(cam.active)
                 found = True
                 break
-                
+
         if not found and cam.active:
             cameras.append({
                 "id": cam.camera_id,
@@ -203,14 +205,27 @@ def sync_camera_to_yaml(cam: Camera):
                 "lat": cam.lat,
                 "lng": cam.lng,
                 "enabled": True,
+                "started": True,
                 "fps_limit": 15,
                 "priority": "high"
             })
-            
+
         data["cameras"] = cameras
         _write_cameras_yaml(yaml_path, data)
     except Exception as e:
         logger.error(f"Failed to sync camera to yaml: {e}")
+
+
+def remove_camera_from_yaml(camera_id: str):
+    """Drop a camera from cameras.yaml so GET /cameras cannot resurrect it as Paused."""
+    if not CAMERAS_YAML.exists():
+        return
+    data = yaml.safe_load(CAMERAS_YAML.read_text()) or {}
+    kept = [c for c in (data.get("cameras") or []) if c.get("id") != camera_id]
+    if len(kept) == len(data.get("cameras") or []):
+        return
+    data["cameras"] = kept
+    _write_cameras_yaml(CAMERAS_YAML, data)
 
 CAMERAS_YAML = Path(__file__).resolve().parents[2] / "config" / "cameras.yaml"
 POWER_ROLES = {"admin", "supervisor", "operator"}
@@ -291,12 +306,11 @@ def delete_camera(camera_id: str, request: Request, db: Session = Depends(get_db
     camera = db.query(Camera).filter(Camera.camera_id == camera_id).first()
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
-    camera.active = False
-    sync_camera_to_yaml(camera)
     _forget_heartbeat(camera_id)
     log_audit(db, admin, "CAMERA_DELETE", "camera", camera_id, f"name={camera.name}", request)
     db.delete(camera)
     db.commit()
+    remove_camera_from_yaml(camera_id)
     return {"status": "deleted"}
 
 

@@ -45,7 +45,7 @@ cd frontend && npm run dev
 
 - `INTERNAL_API_KEY` in `.env` must match between backend and pipeline
 - Camera GPS in `config/cameras.yaml` or `config/config.yaml`
-- Local webcams: prefer `source: device:<unique id>` over an index (`utils/media/devices.py`). OpenCV numbers cameras in unique-ID order, so plugging one in renumbers the others. The Cameras page lists connected devices (`GET /api/v1/cameras/devices`); a new one stays unused until an admin clicks "Use this camera". Pause/Resume is the `enabled` flag in `cameras.yaml`
+- Local webcams: prefer `source: device:<unique id>` over an index (`utils/media/devices.py`). OpenCV numbers cameras in unique-ID order, so plugging one in renumbers the others. The Cameras page lists connected devices (`GET /api/v1/cameras/devices`); a newly plugged-in webcam is registered and started automatically. Pause/Resume is the `enabled` flag in `cameras.yaml`. Deleting a camera also removes it from `cameras.yaml` so it cannot come back as Paused.
 - Press `S` for pipeline stats, `T` for thermal, `Q` to quit
 - Face work runs in worker subprocesses (`core/recognition/face_worker.py`, `FACE_WORKERS`, default 1): dlib next to PyTorch/MPS in one process segfaults. Detector is YuNet (`models/face_detection_yunet_2023mar.onnx`, fetched by `ensure_local_env.py`; dlib is the fallback)
 - Read model results (`read_boxes`) inside the model lock: MPS tensor reads outside it crash the process

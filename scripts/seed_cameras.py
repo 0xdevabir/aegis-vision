@@ -18,6 +18,8 @@ def seed_cameras():
     db = SessionLocal()
     try:
         for cam_id, info in registry.items():
+            if cam_id in {"cam_0", "video_0"}:
+                continue
             existing = db.query(Camera).filter(Camera.camera_id == cam_id).first()
             if existing:
                 existing.name = info.get("name", cam_id)

@@ -56,3 +56,29 @@ def test_operator_starts_and_stops_a_camera(tmp_path, monkeypatch):
     assert client.post("/api/v1/cameras/nope/power", json={"on": True}, headers=op).status_code == 404
     assert client.post("/api/v1/cameras/laptop/power", json={"on": True}, headers=_auth("police")).status_code == 403
     assert client.post("/api/v1/cameras/laptop/power", json={"on": True}).status_code == 401
+
+
+def test_delete_camera_removes_yaml_entry(tmp_path, monkeypatch):
+    init_db()
+    path = tmp_path / "cameras.yaml"
+    path.write_text(yaml.safe_dump({"cameras": [
+        {"id": "keep", "source": "0", "enabled": True, "started": True},
+        {"id": "ghost", "source": "1", "enabled": False, "started": False},
+    ]}))
+    monkeypatch.setattr(camera_routes, "CAMERAS_YAML", path)
+    from backend.auth.auth import hash_password, issue_token
+    from backend.models.camera import Camera
+    db = SessionLocal()
+    admin = db.query(User).filter(User.username == "power_admin").first()
+    if not admin:
+        admin = User(username="power_admin", email="power_admin@t.local",
+                     hashed_password=hash_password("pass1234"), role="admin", is_active=True)
+        db.add(admin)
+    db.query(Camera).filter(Camera.camera_id == "ghost").delete()
+    db.add(Camera(camera_id="ghost", name="Ghost", rtsp_url="1", active=False))
+    db.commit()
+    hdr = {"Authorization": "Bearer " + issue_token(admin)}
+    db.close()
+    assert client.delete("/api/v1/cameras/ghost", headers=hdr).status_code == 200
+    ids = [c["id"] for c in yaml.safe_load(path.read_text())["cameras"]]
+    assert ids == ["keep"]

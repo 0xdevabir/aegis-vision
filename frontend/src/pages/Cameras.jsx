@@ -203,7 +203,7 @@ export function Cameras({ ctx }) {
         <Card
           className="mb"
           title="Connected to this computer"
-          sub="A newly connected camera is listed here and stays unused until you choose to use it"
+          sub="Newly connected cameras are added and started automatically"
         >
           {local.devices.map((d) => {
             const cam = cameras.find((c) => c.camera_id === d.camera_id)

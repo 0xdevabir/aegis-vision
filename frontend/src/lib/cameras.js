@@ -1,5 +1,13 @@
 export const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
 
+const SKIP_AUTO = /iphone|ipad|continuity|obs virtual|virtual camera/i
+
+/** True for a plugged-in webcam that should be registered without a click. */
+export function isAutoClaimable(d) {
+  if (!d || d.camera_id) return false
+  return !SKIP_AUTO.test(d.name || '')
+}
+
 /** addCamera() body for a camera detected on the computer: a free id, bound to that exact device. */
 export function cameraForDevice(d, cameras = []) {
   const taken = new Set(cameras.map((c) => c.camera_id))

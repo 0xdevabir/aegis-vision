@@ -14,7 +14,7 @@ import { parseTs } from './lib/time'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useAutoAlerts } from './hooks/useAutoAlerts'
 import { can, canViewPage } from './lib/permissions'
-import { buildCamList, cameraForDevice } from './lib/cameras'
+import { buildCamList, cameraForDevice, isAutoClaimable } from './lib/cameras'
 import { Card, Empty, Icons, Pill } from './components/ui'
 import { CommandPalette } from './components/CommandPalette'
 import { NotificationDrawer } from './components/NotificationDrawer'
@@ -445,6 +445,22 @@ function App() {
       toast(`Could not connect the camera: ${e.message}`, 'danger')
     }
   }
+
+  // Plug in a webcam: it is registered and started without a "Use this camera" click.
+  const claiming = useRef(new Set())
+  useEffect(() => {
+    if (!authed || !can(me?.role, 'camera.manage')) return undefined
+    const unused = (devices.devices || []).filter(isAutoClaimable)
+    unused.forEach((d) => {
+      if (claiming.current.has(d.source)) return
+      claiming.current.add(d.source)
+      addCamera(cameraForDevice(d, cameras))
+        .then(() => { toast(`"${d.name}" detected and started`, 'ok'); reloadCameras() })
+        .catch(() => {})
+        .finally(() => claiming.current.delete(d.source))
+    })
+    return undefined
+  }, [authed, me?.role, devices, cameras, reloadCameras, toast])
 
   const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, power, devices.unplugged),
     [cameras, systemStatus, streamingCams, power, devices.unplugged])

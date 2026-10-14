@@ -85,10 +85,27 @@ def ensure_reid_model() -> None:
         print(f"  tracking model not downloaded ({e}); cross-camera tracking by appearance is off")
 
 
+def ensure_action_model() -> None:
+    """Build the ST-GCN action model (12 MB) from MMAction2's pretrained checkpoint. Best effort:
+    without it behavior falls back to the rule-based checks only."""
+    sys.path.insert(0, str(ROOT))
+    from core.analysis.action import ACTION_MODEL
+
+    if ACTION_MODEL.is_file():
+        return
+    import subprocess
+
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "export_action_model.py")])
+    if result.returncode != 0:
+        print("  action model not built; fighting/pushing/falling recognition is off "
+              "(retry: python scripts/export_action_model.py)")
+
+
 def main() -> int:
     ensure_face_model()
     ensure_attribute_model()
     ensure_reid_model()
+    ensure_action_model()
     if not ENV_PATH.exists():
         if EXAMPLE.exists():
             ENV_PATH.write_text(EXAMPLE.read_text())

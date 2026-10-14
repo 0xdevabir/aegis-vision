@@ -24,17 +24,48 @@ def make_deepsort(appearance: str, **kw) -> DeepSort:
     return DeepSort(embedder=None, **kw)
 
 
+def reid_embeds(frame, boxes) -> list:
+    """Person re-identification vectors (models/person_reid_youtu_2021nov.onnx) for corner boxes.
+    Far better than colour histograms at telling apart people in similar clothes, so ids survive
+    people crossing / overlapping."""
+    from core.tracking.cross_camera import embed_many
+    h, w = frame.shape[:2]
+    out = np.tile(np.float32(1 / np.sqrt(768)), (len(boxes), 768))   # placeholder for unusable crops
+    crops, rows = [], []
+    for i, (x1, y1, x2, y2) in enumerate(boxes):
+        x1, y1, x2, y2 = max(0, int(x1)), max(0, int(y1)), min(w, int(x2)), min(h, int(y2))
+        if x2 - x1 >= 8 and y2 - y1 >= 16:
+            crops.append(frame[y1:y2, x1:x2])
+            rows.append(i)
+    if crops:
+        vecs = embed_many(crops)
+        for i, v in zip(rows, vecs):
+            if v.any():                  # DeepSORT divides by the norm: never hand it a zero vector
+                out[i] = v
+    return list(out)
+
+
 class HumanTracker:
-    def __init__(self, appearance: str = "histogram", algorithm: str = "deepsort"):
+    def __init__(self, appearance: str = "histogram", algorithm: str = "deepsort", **overrides):
+        # 'reid' measured ~290 ms/frame on CPU with 2-5 people and more broken-up ids: GPU only.
+        if appearance == "reid":
+            from core.tracking.cross_camera import REID_MODEL
+            if not REID_MODEL.is_file():
+                appearance = "histogram"     # a track's gallery can't mix the two kinds of vector
         self.appearance = appearance
-        self.tracker, self._bytetrack = make_tracker(
-            algorithm, appearance,
+        reid = appearance == "reid"
+        params = dict(
             max_age=50,             # keep lost track longer (default 30)
             n_init=2,               # confirm track after 2 detections (better for low FPS)
-            max_iou_distance=0.9,   # looser IoU matching for low FPS
-            max_cosine_distance=0.4,# looser appearance matching
+            # IoU gate: 0.9 let a coasting track jump onto a different, barely overlapping person
+            # (0.7 halved likely id switches on office recordings, 6 → 3)
+            max_iou_distance=0.7,
+            # ReID vectors of one person sit well under 0.3 apart; histograms need more slack
+            max_cosine_distance=0.3 if reid else 0.4,
             nn_budget=100,          # appearance feature memory
         )
+        params.update(overrides)
+        self.tracker, self._bytetrack = make_tracker(algorithm, appearance, **params)
 
     def track(self, detections, frame):
         """`detections`: [([x1, y1, x2, y2], conf, cls)] — corners, as HumanDetector returns.
@@ -48,7 +79,10 @@ class HumanTracker:
         raw = [([x1, y1, x2 - x1, y2 - y1], conf, cls) for (x1, y1, x2, y2), conf, cls in detections]
         if self.appearance == "cnn":
             return self.tracker.update_tracks(raw, frame=frame)
-        embeds = [hist_embed(frame, *box) for box, _, _ in detections]
+        if self.appearance == "reid":
+            embeds = reid_embeds(frame, [box for box, _, _ in detections])
+        else:
+            embeds = [hist_embed(frame, *box) for box, _, _ in detections]
         return self.tracker.update_tracks(raw, embeds=embeds)
 
 

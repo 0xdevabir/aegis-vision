@@ -10,7 +10,7 @@ cameras:
   priority: high
 - id: laptop
   name: Laptop Camera
-  source: '0'
+  source: device:6C707041-05AC-0011-0003-000000000001
   location: Local
   lat: 23.8103
   lng: 90.4125
@@ -24,7 +24,7 @@ cameras:
   location: Local
   lat: 23.8103
   lng: 90.4125
-  enabled: true
+  enabled: false
   fps_limit: 8
   priority: high
   started: true

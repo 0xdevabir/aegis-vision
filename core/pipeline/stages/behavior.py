@@ -20,7 +20,7 @@ class BehaviorStage(PipelineStage):
     """Analyzes tracked persons for suspicious behavior and anomalies."""
 
     def __init__(self, pose_analyzer=None, anomaly_detector=None,
-                 anpr=None, plate_db=None, fall_detector=None,
+                 anpr=None, plate_db=None, fall_detector=None, action_recognizer=None,
                  pose_every_n: int = 2, anpr_every_n: int = 3, enabled: bool = True):
         super().__init__(name="behavior", enabled=enabled)
         self.pose_analyzer = pose_analyzer
@@ -28,6 +28,8 @@ class BehaviorStage(PipelineStage):
         self.anpr = anpr
         self.plate_db = plate_db
         self.fall_detector = fall_detector if fall_detector is not None else FallDetector()
+        self.action_recognizer = action_recognizer
+        self._actions = {}                   # track id → (reason, NTU label, probability)
         self.pose_every_n = max(1, pose_every_n)   # pose is the costliest per-frame step
         self._frames = 0
         self._last_poses = {}
@@ -58,6 +60,8 @@ class BehaviorStage(PipelineStage):
                 except Exception as e:
                     logger.warning(f"Pose error: {e}")
                     self._last_poses = {}
+                if self.action_recognizer is not None:     # fed once per fresh pose pass
+                    self._actions = self.action_recognizer.update(now, ctx.frame.shape, self._last_poses)
         poses = {k: v for k, v in self._last_poses.items() if k in live}
         self.fall_detector.prune(live)
 
@@ -91,6 +95,14 @@ class BehaviorStage(PipelineStage):
             is_suspicious, reasons = is_suspicious_behavior(
                 self._track_history[track_id], pose_landmarks
             )
+
+            # Learned actions (ST-GCN): a fall joins the rule-based fall alert, the rest are reasons
+            action = self._actions.get(track_id)
+            if action and action[0] == "falling":
+                ctx.fall_tracks[track_id] = {"bbox": (x1, y1, x2, y2)}
+            elif action and action[0] not in reasons:
+                reasons.append(action[0])
+                is_suspicious = True
 
             if is_suspicious:
                 ctx.suspicious_tracks[track_id] = reasons

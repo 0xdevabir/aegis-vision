@@ -48,13 +48,31 @@ def test_stand_up_resets_episode():
     assert d.update(1, *LYING, now=5.1)
 
 
-def test_assign_poses_by_overlap():
-    t = MagicMock(track_id=3)
+def _track(tid, box, since=0):
+    t = MagicMock(track_id=tid, time_since_update=since)
     t.is_confirmed.return_value = True
-    t.to_ltrb.return_value = (0, 0, 100, 200)
+    t.to_ltrb.return_value = box
+    return t
+
+
+def test_assign_poses_by_overlap():
+    t = _track(3, (0, 0, 100, 200))
     poses = [{"bbox": (10, 10, 90, 190), "kpts": {}}, {"bbox": (400, 0, 480, 200), "kpts": {}}]
     assert list(assign_poses(poses, [t])) == [3]
     assert assign_poses(poses[1:], [t]) == {}
+
+
+def test_overlapping_people_each_get_their_own_skeleton():
+    big = _track(1, (0, 0, 200, 400))            # wide box that contains both people
+    small = _track(2, (100, 0, 200, 400))
+    a = {"bbox": (0, 0, 110, 400), "kpts": {}}
+    b = {"bbox": (100, 0, 200, 400), "kpts": {}}
+    out = assign_poses([a, b], [big, small])
+    assert out[2] is b and out[1] is a
+
+
+def test_coasting_track_gets_no_pose():
+    assert assign_poses([{"bbox": (10, 10, 90, 190), "kpts": {}}], [_track(3, (0, 0, 100, 200), since=2)]) == {}
 
 
 def test_raised_arms_uses_dict_keypoints_and_scales():

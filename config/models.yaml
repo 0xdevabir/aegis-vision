@@ -67,17 +67,21 @@ models:
     description: "License plate text recognition"
     # Upgrade path: PaddleOCR (faster, better Bangla support)
 
+  action_recognizer:
+    name: "ST-GCN (MMAction2, NTU RGB+D 60, COCO-17 2D joints)"
+    path: "models/action_stgcn_ntu60.onnx"
+    type: onnx
+    version: "20221129-484a394a"
+    device: "cpu"                      # OpenCV DNN; no torch/MPS
+    description: "Skeleton action recognition on pose keypoints: fighting, pushing, falling, staggering"
+    source: "https://github.com/open-mmlab/mmaction2 (Apache-2.0), built by scripts/export_action_model.py"
+    optional: true
+
 # --- Future Models (not yet integrated) ---
 # person_reid:
 #   name: "OSNet"
 #   path: "models/osnet_x1_0.pth"
 #   type: torchreid
 #   description: "Person re-identification for cross-camera tracking"
-#
-# action_recognition:
-#   name: "SlowFast R50"
-#   path: "models/slowfast_r50.pth"
-#   type: pytorchvideo
-#   description: "Action recognition (fighting, falling, running, etc.)"
 #
 

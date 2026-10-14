@@ -51,11 +51,12 @@ case "$role" in
     wait_for_db
     echo "[entrypoint] waiting for the API…"
     until curl -sf "${BACKEND_URL:-http://backend:8000}/health" >/dev/null; do sleep 3; done
-    # Small ONNX models (face detector, gender/age) into the mounted models/. Best effort.
+    # Small ONNX models (face detector, gender/age, ST-GCN actions) into the mounted models/. Best effort.
     python - <<'PY' || true
-from scripts.ensure_local_env import ensure_attribute_model, ensure_face_model
+from scripts.ensure_local_env import ensure_action_model, ensure_attribute_model, ensure_face_model
 ensure_face_model()
 ensure_attribute_model()
+ensure_action_model()
 PY
     # Optional single-file source (set PIPELINE_VIDEO=data/demo/clips/foo.mp4).
     # Default: multi-camera from config/cameras.yaml (webcam indexes use LOCAL_CAMERA_URL).

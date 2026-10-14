@@ -97,3 +97,30 @@ def test_ingest_needs_the_internal_key_and_a_real_image():
                     headers=KEY, files={"file": ("capture.jpg", b"not an image", "image/jpeg")})
     assert r.status_code == 400
     assert client.get("/api/v1/captures/").status_code == 401
+
+
+def test_suspicious_people_only_go_in_the_basket_when_chosen():
+    init_db()
+    db = SessionLocal()
+    alert = Alert(alert_type="SUSPICIOUS_BEHAVIOR", severity="high", camera_id="cap_cam_sus", track_id=7)
+    db.add(alert)
+    db.commit()
+    alert_id = alert.id
+    db.close()
+    auth = {"Authorization": f"Bearer {_token()}"}
+
+    assert client.put("/api/v1/captures/scope", json={"scope": "red"}, headers=auth).status_code == 200
+    assert client.get("/api/v1/captures/scope", headers=auth).json() == {"scope": "red"}
+    assert client.get("/api/v1/config/runtime", headers=KEY).json()["capture_scope"] == "red"
+    assert _ingest("cap_cam_sus", alert_type="SUSPICIOUS_BEHAVIOR").json()["status"] == "off"
+
+    assert client.put("/api/v1/captures/scope", json={"scope": "suspicious"}, headers=auth).status_code == 200
+    assert client.get("/api/v1/config/runtime", headers=KEY).json()["capture_scope"] == "suspicious"
+    r = _ingest("cap_cam_sus", alert_type="SUSPICIOUS_BEHAVIOR")
+    assert r.json()["status"] == "stored" and r.json()["alert_id"] == alert_id
+    assert any(c["alert_id"] == alert_id for c in client.get("/api/v1/captures/", headers=auth).json())
+
+    # Back to criminals only: suspicious stills drop out of the basket.
+    client.put("/api/v1/captures/scope", json={"scope": "red"}, headers=auth)
+    assert not any(c["alert_id"] == alert_id for c in client.get("/api/v1/captures/", headers=auth).json())
+    assert client.put("/api/v1/captures/scope", json={"scope": "everyone"}, headers=auth).status_code == 400

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Card, Icons, Modal, Seg, Tag, timeAgo } from './ui'
+import { Card, Icons, Modal, Tag, timeAgo } from './ui'
 import { useToast } from './Toast'
 import { eventLabel } from '../lib/events'
 import { parseTs } from '../lib/time'
@@ -192,7 +192,13 @@ function CaptureDetail({ c }) {
   )
 }
 
-function BasketModal({ items, selectedId, onSelect, onClose }) {
+function BasketModal({ items: latest, selectedId, onSelect, onClose }) {
+  // Frozen while open so live captures don't shift the list or swap the photo under the reader
+  const [items, setItems] = useState(latest)
+  const known = useMemo(() => new Set(items.map((c) => c.id)), [items])
+  const fresh = latest.filter((c) => !known.has(c.id)).length
+  const showNew = () => setItems(latest)
+
   const groups = useMemo(() => {
     const byAlert = new Map()
     items.forEach((c) => {
@@ -217,6 +223,12 @@ function BasketModal({ items, selectedId, onSelect, onClose }) {
 
   return (
     <Modal className="modal-wide" title={`Capture basket · ${items.length} ${items.length === 1 ? 'picture' : 'pictures'}`} onClose={onClose}>
+      {fresh > 0 && (
+        <div className="cap-fresh" role="status">
+          <span>{fresh} new {fresh === 1 ? 'picture' : 'pictures'} since you opened this</span>
+          <button type="button" className="btn btn-sm" onClick={showNew}>Show</button>
+        </div>
+      )}
       {items.length === 0 ? (
         <p className="muted">No pictures yet. During a red alert the system takes a zoomed picture of the subject every few seconds and drops it here.</p>
       ) : (
@@ -247,6 +259,27 @@ function BasketModal({ items, selectedId, onSelect, onClose }) {
   )
 }
 
+const SCOPES = [
+  { value: 'red', label: 'Criminals only', hint: 'Pictures are taken only during a red alert: a watchlist match, an armed person or a tracked subject.' },
+  { value: 'suspicious', label: 'Criminals + suspicious people', hint: 'Also takes pictures of people flagged for suspicious behaviour (for example fighting or pushing).' },
+]
+
+function ScopeModal({ scope, onPick, onClose }) {
+  return (
+    <Modal title="Who gets pictures in the basket" onClose={onClose}>
+      <div className="scope-options" role="radiogroup" aria-label="Who gets pictures in the basket">
+        {SCOPES.map((o) => (
+          <button type="button" key={o.value} role="radio" aria-checked={scope === o.value}
+            className={`scope-option ${scope === o.value ? 'on' : ''}`} onClick={() => onPick(o.value)}>
+            <b>{o.label}</b>
+            <span>{o.hint}</span>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
 /** Live-page card: red-alert pictures fly from the camera tile into the basket as they are taken. */
 export function CaptureBasket({ captureEvent }) {
   const [items, setItems] = useState([])
@@ -258,6 +291,12 @@ export function CaptureBasket({ captureEvent }) {
   const liveTimer = useRef(null)
   const running = useRef(new Set())
   const [scope, setScope] = useState('red')         // 'red' = red alerts only, 'suspicious' = suspicious people too
+  const [scopeOpen, setScopeOpen] = useState(false)
+  const dialogOpen = openId !== undefined || scopeOpen
+  const dialogRef = useRef(false)
+  useEffect(() => { dialogRef.current = dialogOpen }, [dialogOpen])
+  const closeBasket = useCallback(() => setOpenId(undefined), [])
+  const closeScope = useCallback(() => setScopeOpen(false), [])
   const { push: toast } = useToast()
 
   const loadCaptures = useCallback(() => {
@@ -316,7 +355,8 @@ export function CaptureBasket({ captureEvent }) {
     const entry = { cancel: () => {} }
     const cancel = () => entry.cancel()
     running.current.add(cancel)
-    entry.cancel = playCapture(captureEvent, dropRef.current, () => {
+    // No flight behind an open dialog: it would animate under the blur and only cost frames
+    entry.cancel = playCapture(captureEvent, dialogRef.current ? null : dropRef.current, () => {
       running.current.delete(cancel)
       land(captureEvent, gap)
     })
@@ -332,13 +372,11 @@ export function CaptureBasket({ captureEvent }) {
   return (
     <>
       <Card title="Capture basket" actions={live ? <Tag tone="danger">CAPTURING</Tag> : undefined}>
-        <div className="basket-scope" title="Which people get pictures in the basket">
-          <Seg value={scope} onChange={changeScope} options={[
-            { value: 'red', label: 'Criminals only' },
-            { value: 'suspicious', label: '+ Suspicious' },
-          ]} />
+        <div className="basket-scope">
+          <span>Capturing <b>{scope === 'suspicious' ? 'criminals + suspicious' : 'criminals only'}</b></span>
+          <button type="button" className="btn btn-sm" onClick={() => setScopeOpen(true)}>Change</button>
         </div>
-        <button type="button" className={`basket ${live ? 'live' : ''}`} onClick={() => setOpenId(null)}
+        <button type="button" className={`basket ${live ? 'live' : ''}`} onClick={() => setOpenId(items[0]?.id ?? null)}
           aria-label={`Open capture basket, ${items.length} pictures`}>
           <span className="basket-icon" ref={dropRef}>
             <BasketIcon />
@@ -366,7 +404,10 @@ export function CaptureBasket({ captureEvent }) {
         )}
       </Card>
       {openId !== undefined && (
-        <BasketModal items={items} selectedId={openId} onSelect={setOpenId} onClose={() => setOpenId(undefined)} />
+        <BasketModal items={items} selectedId={openId} onSelect={setOpenId} onClose={closeBasket} />
+      )}
+      {scopeOpen && (
+        <ScopeModal scope={scope} onClose={closeScope} onPick={(next) => { closeScope(); if (next !== scope) changeScope(next) }} />
       )}
     </>
   )

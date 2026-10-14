@@ -252,7 +252,8 @@ export function LiveMonitoring({ ctx }) {
   }
 
   // One list: registered cameras, overlaid with live heartbeat + stream state.
-  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, power), [cameras, systemStatus, streamingCams, power])
+  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, power, ctx.unplugged),
+    [cameras, systemStatus, streamingCams, power, ctx.unplugged])
 
   const counts = {
     live: camList.filter((c) => c.status === 'live').length,

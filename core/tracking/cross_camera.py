@@ -34,17 +34,27 @@ _net_lock = threading.Lock()
 
 def embed(crop) -> Optional[np.ndarray]:
     """Unit-length appearance vector of a person crop (BGR). None when the model is not installed."""
+    out = embed_many([crop])
+    return None if out is None or not out[0].any() else out[0]
+
+
+def embed_many(crops) -> Optional[np.ndarray]:
+    """(n, 768) unit-length vectors for person crops (~20 ms per crop on CPU); None when the model
+    is not installed. One crop per forward: OpenCV DNN returns wrong vectors for a batch of this model."""
     global _net
     with _net_lock:                                  # one net for every camera thread
         if _net is None:
             _net = cv2.dnn.readNetFromONNX(str(REID_MODEL)) if REID_MODEL.is_file() else False
         if _net is False:
             return None
-        blob = cv2.dnn.blobFromImage(crop, 1 / 255.0, (128, 256), swapRB=True)
-        _net.setInput((blob - _MEAN) / _STD)
-        out = _net.forward().flatten()
-    n = float(np.linalg.norm(out))
-    return out / n if n else None
+        rows = []
+        for crop in crops:
+            _net.setInput((cv2.dnn.blobFromImage(crop, 1 / 255.0, (128, 256), swapRB=True) - _MEAN) / _STD)
+            rows.append(_net.forward().flatten())
+    out = np.array(rows, np.float64).reshape(len(crops), -1)
+    out[~np.isfinite(out).all(axis=1)] = 0           # degenerate crops can overflow
+    n = np.linalg.norm(out, axis=1, keepdims=True)
+    return np.divide(out, n, out=np.zeros_like(out), where=n > 0).astype(np.float32)
 
 
 @dataclass

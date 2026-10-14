@@ -1646,6 +1646,26 @@ kbd {
 @media (max-width: 640px) { .form-grid .two { grid-template-columns: 1fr; } }
 
 /* ---- Red-alert capture basket (Live page) ---- */
+.basket-scope {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 10px; font-size: 0.84rem; color: var(--text-3);
+}
+.basket-scope b { color: var(--text); font-weight: 600; }
+.scope-options { display: flex; flex-direction: column; gap: 10px; }
+.scope-option {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
+  padding: 14px 16px; border-radius: 14px; cursor: pointer; color: var(--text);
+  background: var(--surface-2); border: 2px solid var(--border);
+  transition: border-color 0.2s var(--ease);
+}
+.scope-option:hover { border-color: var(--border-strong); }
+.scope-option.on { border-color: var(--primary); }
+.scope-option span { font-size: 0.82rem; color: var(--text-3); }
+.cap-fresh {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 14px; padding: 8px 8px 8px 14px; border-radius: 12px;
+  background: var(--danger-soft); font-size: 0.86rem;
+}
 .basket {
   display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
   padding: 12px; border-radius: 18px; cursor: pointer; color: var(--text);
@@ -1719,11 +1739,12 @@ kbd {
 .cap-list header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; font-size: 0.9rem; }
 .cap-list header span { font-size: 0.78rem; color: var(--text-3); white-space: nowrap; }
 .cap-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+/* Fixed height so pictures of different sizes don't resize the dialog */
 .cap-photo {
-  border-radius: 18px; overflow: hidden; background: var(--media);
+  height: 46vh; border-radius: 18px; overflow: hidden; background: var(--media);
   display: flex; align-items: center; justify-content: center;
 }
-.cap-photo img { max-width: 100%; max-height: 46vh; object-fit: contain; display: block; animation: fadeIn 0.25s ease; }
+.cap-photo img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; animation: fadeIn 0.25s ease; }
 .cap-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 14px 0 12px; }
 .cap-detail-head .meta { font-size: 0.8rem; color: var(--text-3); margin-top: 2px; }
 .cap-kv { font-size: 0.86rem; }

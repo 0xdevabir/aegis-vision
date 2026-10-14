@@ -3,6 +3,8 @@ import { Card, Icons, Tag, Empty, Seg, Modal, Stat, useConfirm } from '../compon
 import { resolveIp, addCamera, fetchCameraDevices, updateCamera, liveStreamUrl, deleteCamera, fetchUsers, fetchCameraOfficerMap, setCameraOfficers } from '../services/api'
 import { useToast } from '../components/Toast'
 import { can } from '../lib/permissions'
+import { AddCameraModal } from '../components/AddCameraModal'
+import { cameraForDevice, slug } from '../lib/cameras'
 
 // Status comes only from what the system really knows: the pipeline heartbeat and the enabled flag.
 function healthOf(cam, live, unplugged) {
@@ -12,7 +14,6 @@ function healthOf(cam, live, unplugged) {
   return { label: 'No signal', tone: 'warn' }
 }
 
-const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
 const EMPTY_FORM = { camera_id: '', name: '', location: '', lat: '', lng: '', rtsp_url: '' }
 
 // '' → null (not set); anything else must be a number inside the range.
@@ -32,6 +33,7 @@ export function Cameras({ ctx }) {
   const isAdmin = me?.role === 'admin'
   const canManage = can(me?.role, 'camera.manage')
 
+  const [showDevices, setShowDevices] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_FORM)
   const [addLoading, setAddLoading] = useState(false)
@@ -144,12 +146,8 @@ export function Cameras({ ctx }) {
   }, [cameras])
 
   const startDevice = async (d) => {
-    const taken = new Set(cameras.map((c) => c.camera_id))
-    const base = slug(d.name) || 'camera'
-    let cameraId = base
-    for (let n = 2; taken.has(cameraId); n += 1) cameraId = `${base}_${n}`
     try {
-      await addCamera({ camera_id: cameraId, name: d.name, location: 'Local', rtsp_url: d.source })
+      await addCamera(cameraForDevice(d, cameras))
       toast(`"${d.name}" is now in use`, 'ok')
       reloadCameras?.()
     } catch (e) {
@@ -236,7 +234,7 @@ export function Cameras({ ctx }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <Seg value={view} onChange={setView} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
             {canManage && (
-              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+              <button className="btn btn-primary" onClick={() => setShowDevices(true)}>
                 <Icons.camera /> Add camera
               </button>
             )}
@@ -326,9 +324,18 @@ export function Cameras({ ctx }) {
         </Modal>
       )}
 
+      {showDevices && (
+        <AddCameraModal
+          cameras={cameras}
+          onConnect={startDevice}
+          onNetwork={() => { setShowDevices(false); setShowAdd(true) }}
+          onClose={() => setShowDevices(false)}
+        />
+      )}
+
       {showAdd && (
         <Modal
-          title="Add camera"
+          title="Add network camera"
           onClose={closeAdd}
           footer={
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

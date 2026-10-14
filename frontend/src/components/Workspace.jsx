@@ -31,7 +31,7 @@ function PanelHead({ title, open, onToggle, side }) {
 }
 
 /** Left panel: every camera and its state. A row opens that camera on the Live page. */
-export function CameraPanel({ camList, open, onToggle, canManage, canZones, hasMap, onOpenCamera, onLocate, setPage }) {
+export function CameraPanel({ camList, newDevices = [], onConnect, onAdd, open, onToggle, canManage, canZones, hasMap, onOpenCamera, onLocate, setPage }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const q = query.trim().toLowerCase()
@@ -55,7 +55,7 @@ export function CameraPanel({ camList, open, onToggle, canManage, canZones, hasM
         <>
           <div className="panel-body">
             {canManage && (
-              <button type="button" className="btn side-add" onClick={() => setPage('cameras')}><Icons.plus />Add camera</button>
+              <button type="button" className="btn side-add" onClick={onAdd || (() => setPage('cameras'))}><Icons.plus />Add camera</button>
             )}
             <div className="side-find">
               <label className="find-box">
@@ -98,6 +98,22 @@ export function CameraPanel({ camList, open, onToggle, canManage, canZones, hasM
                   )
                 })}
               </div>
+            )}
+            {newDevices.length > 0 && (
+              <>
+                <div className="side-title">On this computer <small>not in use</small></div>
+                <div className="side-list">
+                  {newDevices.map((d) => (
+                    <div className="side-cam" key={d.source}>
+                      <span className="cam-row" style={{ cursor: 'default' }}>
+                        <span className="status-dot" />
+                        <span className="cam-row-main"><b>{d.name}</b><span>Detected</span></span>
+                      </span>
+                      {onConnect && <button type="button" className="btn btn-sm" onClick={() => onConnect(d)}>Connect</button>}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
           {(canManage || canZones) && (

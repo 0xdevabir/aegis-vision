@@ -163,6 +163,9 @@ const modalStack = []   // only the top-most dialog reacts to Esc/Tab
 export function Modal({ title, onClose, children, footer, className = '' }) {
   const ref = useRef(null)
   const titleId = useId()
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose }, [onClose])
+  // Runs once per open: re-running on a new onClose would steal focus and make the dialog jump
   useEffect(() => {
     const opener = document.activeElement
     const node = ref.current
@@ -171,7 +174,7 @@ export function Modal({ title, onClose, children, footer, className = '' }) {
     first?.focus()
     const onKey = (e) => {
       if (modalStack[modalStack.length - 1] !== node) return
-      if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); return }
+      if (e.key === 'Escape') { e.stopPropagation(); closeRef.current?.(); return }
       if (e.key !== 'Tab' || !node) return
       const items = [...node.querySelectorAll(FOCUSABLE)]
       if (!items.length) return
@@ -185,7 +188,7 @@ export function Modal({ title, onClose, children, footer, className = '' }) {
       modalStack.splice(modalStack.indexOf(node), 1)
       opener?.focus?.()
     }
-  }, [onClose])
+  }, [])
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className={`modal ${className}`} ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>

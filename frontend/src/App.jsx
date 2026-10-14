@@ -5,15 +5,16 @@ import {
   fetchIncidentReport, fetchCameras, fetchAnalyticsSummary,
   fetchAnalyticsTrends, fetchAnalyticsLocations, fetchVehiclePlates,
   fetchVehicleDetections, fetchAuditLogs, fetchMe, fetchStreamingCameras,
-  fetchReviewCount, acknowledgeAlert, refreshSession,
+  fetchReviewCount, acknowledgeAlert, refreshSession, fetchCameraDevices, addCamera,
 } from './services/api'
 import { useToast } from './components/Toast'
 import { ProfileModal } from './components/ProfileModal'
+import { AddCameraModal } from './components/AddCameraModal'
 import { parseTs } from './lib/time'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useAutoAlerts } from './hooks/useAutoAlerts'
 import { can, canViewPage } from './lib/permissions'
-import { buildCamList } from './lib/cameras'
+import { buildCamList, cameraForDevice } from './lib/cameras'
 import { Card, Empty, Icons, Pill } from './components/ui'
 import { CommandPalette } from './components/CommandPalette'
 import { NotificationDrawer } from './components/NotificationDrawer'
@@ -235,6 +236,7 @@ function App() {
 
   const [showPalette, setShowPalette] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [showAddCamera, setShowAddCamera] = useState(false)
   const [mapFocus, setMapFocus] = useState(null)      // {cameraId, lat, lng, t}: which camera the map should show
   const [showNotifs, setShowNotifs] = useState(false)
   const [showCopilot, setShowCopilot] = useState(false)
@@ -419,7 +421,27 @@ function App() {
     fetchCameras().then(setCameras).catch(() => {})
   }, [])
 
-  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams), [cameras, systemStatus, streamingCams])
+  // Cameras plugged into this computer right now. Polled, so plugging one in or out shows up by itself.
+  const [devices, setDevices] = useState({ devices: [], unplugged: [] })
+  useEffect(() => {
+    if (!authed || !can(me?.role, 'camera.power')) return undefined    // operational roles only (403 otherwise)
+    const load = () => fetchCameraDevices().then(setDevices).catch(() => {})
+    load()
+    const timer = setInterval(load, 10000)
+    return () => clearInterval(timer)
+  }, [authed, me?.role, cameras])
+  const connectDevice = async (d) => {
+    try {
+      await addCamera(cameraForDevice(d, cameras))
+      toast(`"${d.name}" is connected`, 'ok')
+      reloadCameras()
+    } catch (e) {
+      toast(`Could not connect the camera: ${e.message}`, 'danger')
+    }
+  }
+
+  const camList = useMemo(() => buildCamList(cameras, systemStatus, streamingCams, {}, devices.unplugged),
+    [cameras, systemStatus, streamingCams, devices.unplugged])
   // A camera picked in the cameras panel or the video strip opens on the Live page.
   const openCamera = canViewPage(me?.role, 'live') ? (c) => { setLiveFocus({ cameraId: c.camera_id, t: Date.now() }); setPage('live') } : null
 
@@ -484,7 +506,7 @@ function App() {
     knownPersons, reloadKnownPersons, evidence, mapCameras, mapEvents, cameras,
     report, summary, trends, locations,
     plates, vehicleDetections, auditLogs, reloadVehicles,
-    me, streamingCams, reloadCameras, setPage, mapFocus, liveFocus,
+    me, streamingCams, reloadCameras, setPage, mapFocus, liveFocus, unplugged: devices.unplugged,
     reviewPending, refreshReviewCount, captureEvent,
     theme, setTheme,
   }
@@ -564,6 +586,9 @@ function App() {
           camList={camList} open={panels.left} onToggle={() => togglePanel('left')}
           canManage={can(me?.role, 'camera.manage')} canZones={canViewPage(me?.role, 'zones')} hasMap={canViewPage(me?.role, 'map')}
           onOpenCamera={openCamera}
+          newDevices={devices.devices.filter((d) => !d.camera_id)}
+          onConnect={can(me?.role, 'camera.manage') ? connectDevice : null}
+          onAdd={() => setShowAddCamera(true)}
           onLocate={(c) => {
             const at = mapCameras.find((m) => m.camera_id === c.camera_id)
             setMapFocus({ cameraId: c.camera_id, lat: at?.lat, lng: at?.lng, t: Date.now() })
@@ -684,6 +709,14 @@ function App() {
         />
       )}
       {showProfile && <ProfileModal me={me} onClose={() => setShowProfile(false)} />}
+      {showAddCamera && (
+        <AddCameraModal
+          cameras={cameras}
+          onConnect={connectDevice}
+          onNetwork={() => { setShowAddCamera(false); setPage('cameras') }}
+          onClose={() => setShowAddCamera(false)}
+        />
+      )}
       {showNotifs && (
         <NotificationDrawer events={events} onClose={() => setShowNotifs(false)} onClear={() => { setEvents([]); setClearedAt(Date.now()) }} />
       )}

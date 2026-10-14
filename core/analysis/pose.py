@@ -21,23 +21,31 @@ Pose = Dict[str, Tuple[float, float, float]]       # name → (x, y, confidence)
 
 
 def assign_poses(poses: List[dict], tracks, min_inside: float = 0.5) -> Dict[int, dict]:
-    """Match each pose to the confirmed track whose box contains most of the pose box."""
-    out: Dict[int, dict] = {}
+    """Match poses to confirmed, currently-seen tracks one-to-one, best box IoU first.
+
+    A pose needs at least `min_inside` of its box inside the track box. One-to-one matters when
+    people overlap (a fight): a large box contains both skeletons, and handing the same skeleton
+    to two tracks, or one person's to the other, makes their motion meaningless. Coasting tracks
+    (not matched to a detection this frame) sit at a predicted spot and get no pose.
+    """
+    pairs = []
     for t in tracks:
-        if not t.is_confirmed():
+        if not t.is_confirmed() or getattr(t, "time_since_update", 0) > 0:
             continue
         tx1, ty1, tx2, ty2 = map(int, t.to_ltrb())
-        best, best_r = None, min_inside
-        for p in poses:
+        for j, p in enumerate(poses):
             px1, py1, px2, py2 = p["bbox"]
-            iw = min(tx2, px2) - max(tx1, px1)
-            ih = min(ty2, py2) - max(ty1, py1)
+            inter = max(0, min(tx2, px2) - max(tx1, px1)) * max(0, min(ty2, py2) - max(ty1, py1))
             area = max(1, (px2 - px1) * (py2 - py1))
-            r = max(0, iw) * max(0, ih) / area
-            if r > best_r:
-                best, best_r = p, r
-        if best is not None:
-            out[t.track_id] = best
+            if inter / area > min_inside:
+                union = area + (tx2 - tx1) * (ty2 - ty1) - inter
+                pairs.append((inter / max(1, union), t.track_id, j))
+    out: Dict[int, dict] = {}
+    used = set()
+    for _, tid, j in sorted(pairs, key=lambda x: -x[0]):
+        if tid not in out and j not in used:
+            out[tid] = poses[j]
+            used.add(j)
     return out
 
 

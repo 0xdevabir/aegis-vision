@@ -50,7 +50,10 @@ def test_local_webcam_index_maps_to_bridge_url_only_when_set(monkeypatch):
     monkeypatch.delenv("LOCAL_CAMERA_URL", raising=False)
     assert resolve_source(0) == 0
     monkeypatch.setenv("LOCAL_CAMERA_URL", "http://host.docker.internal:8090/video")
-    assert resolve_source(0) == "http://host.docker.internal:8090/video"
+    # Each host camera is its own stream on the bridge, not one shared feed.
+    assert resolve_source(0) == "http://host.docker.internal:8090/video?source=0"
+    assert resolve_source("1") == "http://host.docker.internal:8090/video?source=1"
+    assert resolve_source("device:0x1A11") == "http://host.docker.internal:8090/video?source=device:0x1A11"
     assert resolve_source("rtsp://cam/1") == "rtsp://cam/1"
 
 

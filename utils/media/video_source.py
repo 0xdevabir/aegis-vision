@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-from .devices import DEVICE_PREFIX, device_index
+from .devices import DEVICE_PREFIX, bridge_url, device_index
 
 logger = logging.getLogger("HumanAnalysis")
 

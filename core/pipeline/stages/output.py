@@ -190,6 +190,12 @@ class OutputStage(PipelineStage):
                     camera_lat=ctx.camera_lat,
                     camera_lng=ctx.camera_lng,
                 )
+                if self.capturer.include_suspicious and not (is_criminal or has_weapon or target):
+                    self.capturer.capture(
+                        f"track_{track_id}", now, ctx.frame, (x1, y1, x2, y2),
+                        alert_type="SUSPICIOUS_BEHAVIOR", track_id=track_id,
+                        person_name=name if name != "Unknown" else None, **capture_meta,
+                    )
 
             if alert and (now - self._last_saved.get(track_id, 0) >= self.evidence_throttle):
                 try:

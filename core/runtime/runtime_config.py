@@ -51,6 +51,8 @@ def apply_runtime_config(pipeline, values: dict) -> dict:
             stage.face_recognizer.tolerance = clean["face_tolerance"]
         elif name == "behavior" and "crowd_threshold" in clean and stage.anomaly_detector is not None:
             stage.anomaly_detector.crowd_threshold = int(clean["crowd_threshold"])
+        elif name == "output" and "capture_scope" in values:
+            stage.capturer.include_suspicious = values["capture_scope"] == "suspicious"
     if "loiter_seconds" in clean:
         configure_behavior({"loiter_seconds": clean["loiter_seconds"]})
     return clean

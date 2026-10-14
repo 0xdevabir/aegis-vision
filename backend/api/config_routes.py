@@ -68,6 +68,8 @@ def runtime_config(
             except ValueError:
                 geometry = None
     out["geometry"] = geometry
+    from backend.api.capture_routes import capture_scope
+    out["capture_scope"] = capture_scope(db)
     return out
 
 

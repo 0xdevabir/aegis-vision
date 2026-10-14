@@ -131,9 +131,9 @@ def list_devices(db: Session = Depends(get_db), user: User = Depends(operator_or
 
     A newly connected camera shows up here unused: nothing runs on it until someone adds it.
     """
-    from utils.media.devices import DEVICE_PREFIX, list_local_cameras
+    from utils.media.devices import DEVICE_PREFIX, list_host_cameras
 
-    devices = list_local_cameras()
+    devices = list_host_cameras()
     by_source = {}
     for cam in sorted(db.query(Camera).all(), key=lambda c: not c.active):    # a running camera wins a shared device
         by_source.setdefault(str(cam.rtsp_url if cam.rtsp_url is not None else "").strip(), cam)

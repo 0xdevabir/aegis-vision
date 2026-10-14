@@ -330,6 +330,15 @@ export async function fetchCaptures(limit = 60) {
   return apiFetch(`/captures/?limit=${limit}`);
 }
 
+/* 'red' = red alerts only, 'suspicious' = suspicious people too */
+export async function fetchCaptureScope() {
+  return apiFetch('/captures/scope');
+}
+
+export async function setCaptureScope(scope) {
+  return apiFetch('/captures/scope', { method: 'PUT', body: JSON.stringify({ scope }) });
+}
+
 export function captureImageUrl(captureId, width) {
   const token = getToken();
   const q = [width ? `w=${width}` : '', token ? `token=${encodeURIComponent(token)}` : ''].filter(Boolean).join('&');

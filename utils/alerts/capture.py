@@ -45,6 +45,7 @@ class AlertCapturer:
     def __init__(self, interval: float = CAPTURE_INTERVAL, enabled: bool = CAPTURE_ENABLED):
         self.interval = interval
         self.enabled = enabled
+        self.include_suspicious = False    # dashboard capture scope, set by the runtime config poll
         self._last: dict = {}
 
     def _due(self, key: str, now: float) -> bool:

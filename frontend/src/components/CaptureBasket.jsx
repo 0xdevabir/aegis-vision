@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Card, Icons, Modal, Tag, timeAgo } from './ui'
+import { Card, Icons, Modal, Seg, Tag, timeAgo } from './ui'
 import { useToast } from './Toast'
 import { eventLabel } from '../lib/events'
 import { parseTs } from '../lib/time'
-import { captureImageUrl, fetchCaptures } from '../services/api'
+import { captureImageUrl, fetchCaptureScope, fetchCaptures, setCaptureScope } from '../services/api'
 
 const DEFAULT_GAP = 5          // seconds between pictures unless the stream shows otherwise
 const KEEP = 300
+const SUSPICIOUS = 'SUSPICIOUS_BEHAVIOR'
 
 const BasketIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -256,8 +257,10 @@ export function CaptureBasket({ captureEvent }) {
   const lastArrival = useRef(0)
   const liveTimer = useRef(null)
   const running = useRef(new Set())
+  const [scope, setScope] = useState('red')         // 'red' = red alerts only, 'suspicious' = suspicious people too
+  const { push: toast } = useToast()
 
-  useEffect(() => {
+  const loadCaptures = useCallback(() => {
     fetchCaptures(120).then((rows) => {
       setItems((prev) => {
         const have = new Set(prev.map((c) => c.id))
@@ -265,6 +268,23 @@ export function CaptureBasket({ captureEvent }) {
       })
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    loadCaptures()
+    fetchCaptureScope().then((r) => setScope(r.scope)).catch(() => {})
+  }, [loadCaptures])
+
+  const changeScope = useCallback((next) => {
+    const prev = scope
+    setScope(next)
+    setCaptureScope(next).then(() => {
+      if (next === 'suspicious') loadCaptures()
+      else setItems((list) => list.filter((c) => c.alert_type !== SUSPICIOUS))
+    }).catch((e) => {
+      setScope(prev)
+      toast(`Could not change what the basket keeps: ${e.message || 'request failed'}`, 'danger')
+    })
+  }, [scope, loadCaptures, toast])
 
   useEffect(() => {
     const active = running.current
@@ -288,6 +308,7 @@ export function CaptureBasket({ captureEvent }) {
   useEffect(() => {
     if (!captureEvent || captureEvent.id === handled.current) return
     handled.current = captureEvent.id
+    if (captureEvent.alert_type === SUSPICIOUS && scope !== 'suspicious') return
     const now = performance.now()
     const since = (now - lastArrival.current) / 1000
     lastArrival.current = now
@@ -299,16 +320,24 @@ export function CaptureBasket({ captureEvent }) {
       running.current.delete(cancel)
       land(captureEvent, gap)
     })
-  }, [captureEvent, land])
+  }, [captureEvent, land, scope])
 
   const newest = items[0]
   const status = live
     ? `${live.label} · a picture every ${live.gap} s`
-    : newest ? `Last picture ${timeAgo(newest.timestamp)}` : 'Fills by itself during a red alert'
+    : newest ? `Last picture ${timeAgo(newest.timestamp)}`
+      : scope === 'suspicious' ? 'Fills by itself during a red alert or for a suspicious person'
+        : 'Fills by itself during a red alert'
 
   return (
     <>
       <Card title="Capture basket" actions={live ? <Tag tone="danger">CAPTURING</Tag> : undefined}>
+        <div className="basket-scope" title="Which people get pictures in the basket">
+          <Seg value={scope} onChange={changeScope} options={[
+            { value: 'red', label: 'Criminals only' },
+            { value: 'suspicious', label: '+ Suspicious' },
+          ]} />
+        </div>
         <button type="button" className={`basket ${live ? 'live' : ''}`} onClick={() => setOpenId(null)}
           aria-label={`Open capture basket, ${items.length} pictures`}>
           <span className="basket-icon" ref={dropRef}>

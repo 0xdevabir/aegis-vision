@@ -11,13 +11,16 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, defer
 
 from backend.auth.auth import operator_or_admin
 from backend.auth.guards import verify_internal_key, viewer_user
 from backend.db.database import SessionLocal, get_db
 from backend.models.alert import Alert
+from backend.models.audit_log import AuditLog
 from backend.models.capture import AlertCapture
+from backend.models.config_entry import ConfigEntry
 from backend.models.known_person import KnownPerson
 from backend.models.user import User
 from backend.utils.websocket import manager
@@ -31,6 +34,17 @@ MAX_PER_ALERT = int(os.getenv("CAPTURE_MAX_PER_ALERT", "120"))        # 10 minut
 RETENTION_DAYS = int(os.getenv("CAPTURE_RETENTION_DAYS", "7"))
 ALERT_WINDOW_MINUTES = 15
 NON_PERSON_TYPES = {"FIRE_SMOKE_DETECTED"}
+
+# What goes in the basket: "red" = red alerts only (watchlist match, armed, tracked, fire);
+# "suspicious" = also people flagged for suspicious behaviour (a high, not critical, alert).
+SCOPE_KEY = "capture.scope"
+SCOPES = ("red", "suspicious")
+SUSPICIOUS_TYPE = "SUSPICIOUS_BEHAVIOR"
+
+
+def capture_scope(db: Session) -> str:
+    row = db.query(ConfigEntry).filter(ConfigEntry.key == SCOPE_KEY).first()
+    return row.value if row and row.value in SCOPES else "red"
 
 
 def _serialize(c: AlertCapture, seq: Optional[int] = None, subject: Optional[dict] = None) -> dict:
@@ -64,9 +78,10 @@ def _serialize(c: AlertCapture, seq: Optional[int] = None, subject: Optional[dic
 
 def _find_alert(db: Session, alert_type: str, camera_id: str, track_id: Optional[int]) -> Optional[Alert]:
     cutoff = datetime.utcnow() - timedelta(minutes=ALERT_WINDOW_MINUTES)
+    severity = "high" if alert_type == SUSPICIOUS_TYPE else "critical"
     q = db.query(Alert).filter(
         Alert.alert_type == alert_type, Alert.camera_id == camera_id,
-        Alert.severity == "critical", Alert.timestamp >= cutoff,
+        Alert.severity == severity, Alert.timestamp >= cutoff,
     ).order_by(Alert.id.desc())
     alert = q.filter(Alert.track_id == track_id).first() if track_id is not None else None
     return alert or q.first()
@@ -84,6 +99,8 @@ def _store(image: bytes, fields: dict) -> dict:
 
     db = SessionLocal()
     try:
+        if fields["alert_type"] == SUSPICIOUS_TYPE and capture_scope(db) != "suspicious":
+            return {"status": "off"}               # basket is set to red alerts only
         alert = _find_alert(db, fields["alert_type"], fields["camera_id"], fields["track_id"])
         if alert is None:
             # The alert and its first capture leave the pipeline together; let the alert land first.
@@ -182,11 +199,43 @@ def list_captures(
 ):
     """Newest first. Image bytes are served separately by /captures/{id}/image."""
     query = db.query(AlertCapture).options(defer(AlertCapture.image_data))
+    if capture_scope(db) != "suspicious":
+        query = query.filter(AlertCapture.alert_type != SUSPICIOUS_TYPE)
     if alert_id is not None:
         query = query.filter(AlertCapture.alert_id == alert_id)
     if camera_id:
         query = query.filter(AlertCapture.camera_id == camera_id)
     return [_serialize(c) for c in query.order_by(AlertCapture.id.desc()).limit(limit).all()]
+
+
+class ScopeIn(BaseModel):
+    scope: str
+
+
+@router.get("/scope")
+def get_scope(db: Session = Depends(get_db), user: User = Depends(operator_or_admin)):
+    return {"scope": capture_scope(db)}
+
+
+@router.put("/scope")
+def set_scope(body: ScopeIn, db: Session = Depends(get_db), user: User = Depends(operator_or_admin)):
+    """Red alerts only, or suspicious people too. The pipeline picks it up on its next config poll."""
+    if body.scope not in SCOPES:
+        raise HTTPException(status_code=400, detail=f"scope must be one of: {', '.join(SCOPES)}")
+    entry = db.query(ConfigEntry).filter(ConfigEntry.key == SCOPE_KEY).first()
+    old = entry.value if entry else None
+    if old != body.scope:
+        db.add(AuditLog(
+            user_id=user.id, username=user.username, action="CONFIG_CHANGE",
+            resource="config", resource_id=SCOPE_KEY, details=f"{old!r} -> {body.scope!r}",
+        ))
+        if entry:
+            entry.value, entry.updated_by = body.scope, user.id
+        else:
+            db.add(ConfigEntry(key=SCOPE_KEY, value=body.scope, updated_by=user.id,
+                               description="Capture basket: red alerts only, or suspicious people too"))
+        db.commit()
+    return {"scope": body.scope}
 
 
 @router.get("/{capture_id}/image")

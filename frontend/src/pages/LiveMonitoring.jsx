@@ -20,7 +20,7 @@ const STATUS = {
 // Red alerts in view right now, as reported by the camera itself.
 const FLAG = { CRIMINAL_DETECTED: 'WATCHLIST', WEAPON_DETECTED: 'ARMED', PERSON_TRACKED: 'TRACKING' }
 
-const ExpandIcon = () => (
+export const ExpandIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
   </svg>
@@ -101,7 +101,7 @@ function CamFeed({ cam, objectFit = 'cover', starting = false, onPower }) {
   )
 }
 
-function CamFullscreen({ cam, alerting, onClose }) {
+export function CamFullscreen({ cam, alerting, onClose }) {
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'

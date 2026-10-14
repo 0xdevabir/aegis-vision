@@ -297,12 +297,22 @@ h1, h2, h3 { text-wrap: balance; }
   display: flex; gap: 8px; padding: 0 10px 10px;
   overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin;
 }
+.deck-cell { position: relative; flex: 0 0 auto; scroll-snap-align: start; }
 .deck-tile {
-  position: relative; flex: 0 0 auto; height: clamp(120px, 22vh, 220px); aspect-ratio: 16/9;
+  position: relative; display: block; height: clamp(120px, 22vh, 220px); aspect-ratio: 16/9;
   padding: 0; border: 1px solid transparent; border-radius: 14px; overflow: hidden; cursor: pointer;
-  background: #000; scroll-snap-align: start;
+  background: #000;
   transition: border-color 0.2s var(--ease);
 }
+.deck-expand {
+  position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
+  color: #f2f1e3; background: rgba(16, 18, 17, 0.6); border-radius: 8px;
+  opacity: 0; transition: opacity 0.15s var(--ease);
+}
+.deck-expand svg { width: 16px; height: 16px; }
+.deck-cell:hover .deck-expand, .deck-expand:focus-visible { opacity: 1; }
+.deck-expand:hover { background: rgba(16, 18, 17, 0.85); }
+@media (hover: none) { .deck-expand { opacity: 1; } }
 .deck-tile:hover, .deck-tile:focus-visible { border-color: var(--primary); outline: none; }
 .deck-tile.hot { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-soft); }
 .deck-tile:disabled { cursor: default; }

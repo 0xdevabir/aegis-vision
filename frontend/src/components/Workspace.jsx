@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Empty, Icons, SEVERITY_TONE, timeAgo } from './ui'
 import { eventLabel } from '../lib/events'
 import { liveStreamUrl } from '../services/api'
+import { CamFullscreen, ExpandIcon } from '../pages/LiveMonitoring'
 
 const CAM_STATUS = {
   live: { label: 'Live', dot: 'ok' },
@@ -189,20 +190,26 @@ export function ResponsePanel({ tools, page, setPage, feed, alertCount, open, on
   )
 }
 
-function DeckFeed({ cam, onOpen }) {
+function DeckFeed({ cam, onOpen, onExpand }) {
   const [failed, setFailed] = useState(false)
   const hot = cam.threat_score >= 40 || cam.flags?.length > 0
   const live = cam.status === 'live'
   return (
-    <button type="button" className={`deck-tile ${hot ? 'hot' : ''}`} disabled={!onOpen} onClick={() => onOpen(cam)}
-      title={onOpen ? `${cam.name}: open on the Live page` : cam.name} aria-label={`${cam.name}, ${CAM_STATUS[cam.status].label}`}>
-      {live && !failed ? (
-        <img src={liveStreamUrl(cam.camera_id)} alt="" onError={() => { setFailed(true); setTimeout(() => setFailed(false), 5000) }} />
-      ) : (
-        <span className="deck-wait"><Icons.camera />{live ? 'Waiting for video' : CAM_STATUS[cam.status].label}</span>
-      )}
-      <span className="deck-name"><span className={`status-dot ${hot ? 'hot' : CAM_STATUS[cam.status].dot}`} />{cam.name}</span>
-    </button>
+    <div className="deck-cell">
+      <button type="button" className={`deck-tile ${hot ? 'hot' : ''}`} disabled={!onOpen} onClick={() => onOpen(cam)}
+        title={onOpen ? `${cam.name}: open on the Live page` : cam.name} aria-label={`${cam.name}, ${CAM_STATUS[cam.status].label}`}>
+        {live && !failed ? (
+          <img src={liveStreamUrl(cam.camera_id)} alt="" onError={() => { setFailed(true); setTimeout(() => setFailed(false), 5000) }} />
+        ) : (
+          <span className="deck-wait"><Icons.camera />{live ? 'Waiting for video' : CAM_STATUS[cam.status].label}</span>
+        )}
+        <span className="deck-name"><span className={`status-dot ${hot ? 'hot' : CAM_STATUS[cam.status].dot}`} />{cam.name}</span>
+      </button>
+      <button type="button" className="icon-btn deck-expand" title="Full screen" aria-label={`${cam.name} full screen`}
+        onClick={() => onExpand(cam)}>
+        <ExpandIcon />
+      </button>
+    </div>
   )
 }
 
@@ -210,6 +217,9 @@ function DeckFeed({ cam, onOpen }) {
 export function CameraDeck({ camList, open, onToggle, onOpenCamera }) {
   const live = camList.filter((c) => c.status === 'live')
   const label = `${open ? 'Hide' : 'Show'} camera video`
+  // By id, so the full-screen view keeps following the camera's live status.
+  const [fullscreenId, setFullscreenId] = useState(null)
+  const fullscreenCam = camList.find((c) => c.camera_id === fullscreenId)
   return (
     <section className={`panel deck ${open ? '' : 'collapsed'}`} aria-label="Camera video">
       <div className="deck-head">
@@ -222,9 +232,15 @@ export function CameraDeck({ camList, open, onToggle, onOpenCamera }) {
         <div className="deck-empty"><Icons.camera />No cameras have been set up yet.</div>
       ) : (
         <div className="deck-strip">
-          {camList.map((c) => <DeckFeed key={c.camera_id} cam={c} onOpen={onOpenCamera} />)}
+          {camList.map((c) => (
+            <DeckFeed key={c.camera_id} cam={c} onOpen={onOpenCamera} onExpand={(cam) => setFullscreenId(cam.camera_id)} />
+          ))}
         </div>
       ))}
+      {fullscreenCam && (
+        <CamFullscreen cam={fullscreenCam} alerting={fullscreenCam.threat_score >= 40}
+          onClose={() => setFullscreenId(null)} />
+      )}
     </section>
   )
 }
